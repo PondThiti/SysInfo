@@ -392,7 +392,7 @@ export default function FileOrganizerView({
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold text-white tracking-tight">ระบบจัดระเบียบไฟล์อัจฉริยะ (File Organizer)</h1>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  v0.10.3
+                  v0.1.2
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                   Rule Engine & Undo Journal

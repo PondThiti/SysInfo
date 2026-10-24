@@ -1352,7 +1352,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <span className="font-bold tracking-tight text-sm text-white">SysInfo</span>
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-medium">
-              v0.10.3 • SysInfo
+              v0.1.2 • SysInfo
             </span>
           </div>
           <span className="hidden md:inline-block text-xs text-slate-500 pl-2 border-l border-slate-800">
@@ -5050,13 +5050,13 @@ export default function App() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-white">ยืนยันการถอนการติดตั้ง</h3>
-                <p className="text-xs text-rose-300/80">SysInfo v0.10.3</p>
+                <p className="text-xs text-rose-300/80">SysInfo v0.1.2</p>
               </div>
             </div>
 
             <div className="text-xs text-slate-300 space-y-2 bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 leading-relaxed">
               <p>
-                คุณต้องการถอนการติดตั้งโปรแกรม <b>SysInfo (v0.10.3)</b> ออกจากเครื่องคอมพิวเตอร์ใช่หรือไม่?
+                คุณต้องการถอนการติดตั้งโปรแกรม <b>SysInfo (v0.1.2)</b> ออกจากเครื่องคอมพิวเตอร์ใช่หรือไม่?
               </p>
               <div className="text-[11px] text-emerald-400 bg-emerald-950/30 p-2.5 rounded-lg border border-emerald-500/20 space-y-1">
                 <p className="font-semibold flex items-center gap-1.5">

@@ -2,7 +2,10 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
-console.log('=== Building SysInfo MSI Installer ===\n');
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+const version = pkg.version || '0.1.2';
+
+console.log(`=== Building SysInfo v${version} MSI Installer ===\n`);
 
 // 1. Build Frontend
 console.log('1. Building frontend with Vite...');
@@ -127,7 +130,7 @@ fs.copyFileSync(
 );
 fs.copyFileSync(
   'release/SysInfo_Setup.msi',
-  path.join(targetDir, 'SysInfo-Setup-0.1.1.msi')
+  path.join(targetDir, `SysInfo-Setup-${version}.msi`)
 );
 fs.copyFileSync(
   'release/SysInfo_Setup.msi',

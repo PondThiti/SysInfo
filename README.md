@@ -1,6 +1,6 @@
 # SysInfo — System Storage, File Organizer & Port Inspector
 
-> **All-in-One PC Utility (v0.10.3):** Storage Analyzer, Smart File Organizer (Rule Engine & Undo Journal), Junk Cleaner, Game Libraries Analyzer & Port Inspector  
+> **All-in-One PC Utility (v0.1.2):** Storage Analyzer, Smart File Organizer (Rule Engine & Undo Journal), Junk Cleaner, Game Libraries Analyzer & Port Inspector  
 > **Platform:** Windows 10 / Windows 11 (x64), Linux, macOS  
 > **Executable:** `sysinfo.exe`  
 > **Distribution:** `.exe` (NSIS), `.zip` (Portable), `.msi` (Windows Installer), `.tar.gz` (Linux)  
@@ -9,7 +9,7 @@
 
 ---
 
-## 🌟 ฟีเจอร์ใหม่ในเวอร์ชัน 0.10.3 (What's New in v0.10.3)
+## 🌟 ฟีเจอร์ใหม่ในเวอร์ชัน 0.1.2 (What's New in v0.1.2)
 
 ### 1. 🗂️ ระบบจัดระเบียบไฟล์อัจฉริยะ (Smart File Organizer)
 * **Rule Engine (กฎ "ถ้า → แล้ว"):** กรองตามนามสกุล, ประเภทไฟล์, ขนาด, วันที่, และโฟลเดอร์ต้นทาง
@@ -55,9 +55,9 @@
 
 ไฟล์ตัวติดตั้งถูกส่งออกไปยัง: [`C:\Users\zeroy\Desktop\MyProject\Apps\PC-App\`](file:///C:/Users/zeroy/Desktop/MyProject/Apps/PC-App/)
 
-1. **Windows NSIS Setup (`.exe`):** `SysInfo-Setup-0.10.3.exe` / `SysInfo_Setup.exe`
-2. **Windows Portable Archive (`.zip`):** `SysInfo-0.10.3-win.zip` / `SysInfo_Portable.zip`
-3. **Windows MSI Installer (`.msi`):** `SysInfo-Setup-0.10.3.msi` / `SysInfo_Setup.msi`
+1. **Windows NSIS Setup (`.exe`):** `SysInfo-Setup-0.1.2.exe` / `SysInfo_Setup.exe`
+2. **Windows Portable Archive (`.zip`):** `SysInfo-0.1.2-win.zip` / `SysInfo_Portable.zip`
+3. **Windows MSI Installer (`.msi`):** `SysInfo-Setup-0.1.2.msi` / `SysInfo_Setup.msi`
 4. **Linux Application Package (`.tar.gz`):** `SystemStoragePortInspector_Linux_x64.tar.gz`
 
 ---

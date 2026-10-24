@@ -185,7 +185,7 @@ Update (2026-10-24): Game Files Access & Installer Fix (v0.1.1 & sysinfo.exe)
 
 
 ================================================================================
-Update (2026-10-25): Version 0.10.3 - Smart File Organizer, SVG Icon & Undo Journal
+Update (2026-10-25): Version 0.1.2 - Smart File Organizer, SVG Icon & Undo Journal
 ================================================================================
 1. ระบบจัดระเบียบไฟล์อัจฉริยะ (Smart File Organizer):
    - Rule Engine (กฎ "ถ้า -> แล้ว"):
@@ -234,4 +234,4 @@ Update (2026-10-25): Version 0.10.3 - Smart File Organizer, SVG Icon & Undo Jour
 5. อัปเดตสเปกและเอกสาร Wiki:
    - อัปเดต System_Storage_Port_Inspector_Spec.md: §10 (API), §11 (Models), §12 (SQLite Tables), §15.3 (Safety Tests), §15.4 (Acceptance Criteria), Phase 4.5 (File Organizer)
    - สร้างเอกสารวิกิบน GitHub ใน docs/wiki/ (Home.md, File-Organizer-Guide.md, Rule-Engine-and-Templates.md, Architecture-and-Safety.md)
-   - อัปเดตเวอร์ชันเป็น v0.10.3 ใน package.json, package-lock.json, wix/Product.wxs, App.tsx, README.md
+   - อัปเดตเวอร์ชันเป็น v0.1.2 ใน package.json, package-lock.json, wix/Product.wxs, App.tsx, README.md

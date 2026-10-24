@@ -3,7 +3,7 @@
     <Product Id="*"
              Name="SysInfo"
              Language="1033"
-             Version="0.10.3.0"
+             Version="0.1.2.0"
              Manufacturer="SysInfo"
              UpgradeCode="B6A87432-84F1-4F2A-949B-E412581699AB">
         

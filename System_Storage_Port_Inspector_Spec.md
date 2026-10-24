@@ -920,7 +920,7 @@ system-storage-port-inspector/
 
 ตัวอย่างนี้เป็นรูปแบบประกอบการออกแบบเท่านั้น ชนิดข้อมูลจริงควรนิยามร่วมกันใน Rust DTO และ TypeScript type เพื่อป้องกัน Frontend/Backend ไม่ตรงกัน
 
-### 10.6 File Organizer (v0.10.3)
+### 10.6 File Organizer (v0.1.2)
 
 | Command | หน้าที่ | หมายเหตุ |
 |---|---|---|
