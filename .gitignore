@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build and Packaging outputs
+dist/
+build_staging/
+release/
+*.msi
+*.exe
+*.zip
+*.dmg
+*.AppImage
+*.deb
+*.tar.gz
+
+# Local / Cache files
+.brud/
+.env
+.env.local
+.env.*.local
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+
+# WiX temp objects
+wix/*.wixobj
+wix/AppFiles.wxs
+
+# OS generated files
+.DS_Store
+Thumbs.db

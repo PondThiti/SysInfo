@@ -1,0 +1,51 @@
+[2026-10-24 13:22]
+บันทึกประวัติการปรับปรุงและแก้ไขปัญหาเวอร์ชัน 1.1.0:
+
+1. เพิ่มฟีเจอร์ใหม่:
+   - ปรับเลย์เอาต์ระบบ (Layout Lock): ตรึงแถบหัวโปรแกรม (Titlebar) และเมนูด้านซ้าย (Sidebar) ให้อยู่กับที่ ไม่เลื่อนขยับตามหน้า และเพิ่มระบบเลื่อนขึ้น-ลง (Independent Smooth Scrolling: overflow-y-auto) แยกอิสระในแต่ละแท็บเนื้อหาทางขวา
+   - ระบบตรวจสอบและปลดล็อกโปรแกรมที่ถอนการติดตั้งไม่ได้ (Uninstall Blocker & Hidden Process Resolver):
+     * ค้นหาโปรเซสที่แอบทำงานอยู่เบื้องหลัง (Background / No Window / MainWindowHandle = 0)
+     * ตรวจจับ Service และโปรเซสที่ล็อกไฟล์หรือโฟลเดอร์ของโปรแกรมเป้าหมาย (เช่น vgc, Riot, Discord, Steam, Brave, Node)
+     * ปุ่ม 1-Click: "บังคับปิดโปรเซส & หยุด Service ทั้งหมดทันที" ปลดล็อกให้ถอนการติดตั้งหรือลบโฟลเดอร์ได้โดยไม่ติด "File in use"
+   - ระบบตรวจสอบ Windows Services และพอร์ตที่ผูกอยู่ (Windows Services & Port Association Inspector):
+     * เช็คและแสดงว่า Service แต่ละตัวเปิดใช้งานพอร์ตอะไรอยู่ (เช่น mosquitto เปิดพอร์ต 8883/TCP, Print Spooler พอร์ต 49668/TCP, vgc สถานะ Stopped / ไม่มีพอร์ต)
+     * มีปุ่มสั่ง เริ่ม Service (Start) / หยุด Service (Stop) / ปิด Process (Kill PID)
+   - หน้าการตั้งค่าระบบ (Settings Tab):
+     * ตั้งค่าความถี่ Live Telemetry (1s, 2.5s, 5s)
+     * ตั้งค่าเกณฑ์ขนาดไฟล์ใหญ่ขั้นต่ำ (25MB, 50MB, 100MB, 500MB) และความลึกการสแกน (3, 4, 5 ชั้น)
+     * สลับโหมด Safe Delete (ส่งลง Recycle Bin)
+     * เมนูแนะนำการถอนการติดตั้งโปรแกรมอย่างถูกต้อง พร้อมปุ่มกดเปิดหน้า "Add or remove programs" ของ Windows ทันที
+
+2. แก้ไขปัญหาตามข้อกำหนด:
+   - นำข้อมูลจำลอง (Mock Data) ทั้งหมดออก 100%: ไม่มีข้อมูลสมมุติ ทุกอย่างดึงจากระบบ Windows และฮาร์ดแวร์จริง
+   - แก้ไขปัญหาไดรฟ์ D: โผล่มาในหน้าวิเคราะห์:
+     * เปลี่ยนระบบตรวจจับไดรฟ์เป็น [System.IO.DriveInfo]::GetDrives() ที่กรองเฉพาะ IsReady และ TotalSize > 0 เพื่อไม่ให้แสดงไดรฟ์เปล่า/ไดรฟ์จำลอง
+     * ลบไดรฟ์ D: และพาธจำลอง D:\ ออกจากระบบทั้งหมด ปุ่มกรองไดรฟ์จะสร้างไดนามิกตามไดรฟ์จริง (เครื่องนี้แสดงเฉพาะ C: และ All Drives)
+     * Visual Treemap และตารางไฟล์ใหญ่คำนวณจากไฟล์จริงบนเครื่อง (C:\Users, Program Files, AppData, etc.)
+   - นำปุ่มถอนการติดตั้งออกจากตัวโปรแกรม:
+     * ลบปุ่มสีแดง "ถอนการติดตั้ง" ออกจากตัว Titlebar ในแอปตามคำขอ
+     * ใส่ไฟล์ `uninstall.bat` ไว้ในโฟลเดอร์โปรแกรม (`release/win-unpacked/uninstall.bat`)
+     * รองรับการถอนการติดตั้งผ่าน Windows Settings / Add or Remove Programs และ Start Menu Shortcut
+   - บิลด์ตัวติดตั้ง `.msi` ตัวล่าสุดส่งออกไปยัง:
+     `C:\Users\zeroy\Desktop\MyProject\Apps\PC-App\SystemStoragePortInspector_Setup.msi`
+
+================================================================================
+Update (2026-10-24): Icon Integration, Multi-Platform Packaging & Git Setup
+================================================================================
+1. Icon Integration:
+   - นำไฟล์ `pc_system_port_inspector.ico` มาตั้งค่าเป็นแอปไอคอนหลัก
+   - แปลงและรองรับหลายขนาด (Multi-resolution 256x256, 128x128, 48x48, 32x32, 16x16)
+   - อัปเดตไฟล์ไอคอนใน build/, public/, electron/assets/ และผูก BrowserWindow taskbar icon
+   - อัปเดต Favicon ใน index.html
+
+2. Multi-Platform & Multi-Format Installers:
+   - สร้างไฟล์ติดตั้ง Windows NSIS Setup (.exe) ขนาด ~84.08 MB
+   - สร้างไฟล์ Windows Portable Archive (.zip) ขนาด ~114.55 MB
+   - สร้างไฟล์ตัวติดตั้ง Windows MSI Installer (.msi) ขนาด ~115.44 MB
+   - สร้างแพ็กเกจสำหรับ Linux x64 (.tar.gz) ขนาด ~105.79 MB
+   - ส่งออกไฟล์ติดตั้งทั้งหมดไปยังโฟลเดอร์: `C:\Users\zeroy\Desktop\MyProject\Apps\PC-App\`
+   - เพิ่มระบบ GitHub Actions CI/CD (`.github/workflows/build.yml`) รองรับการคอมไพล์ .dmg (macOS), .AppImage, .deb (Linux) และ .exe/.msi (Windows) อัตโนมัติ
+
+3. Git & Repository:
+   - สร้าง `.gitignore` เพื่อแยก binaries และ dependencies
+   - เตรียมชุด Commit และพร้อม Push ขึ้น Remote `https://github.com/PondThiti/SysPulse.git`
