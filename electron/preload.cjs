@@ -33,5 +33,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   syncFilesStatus: (files) => ipcRenderer.invoke('sync-files-status', files),
   syncDuplicateGroups: (groups) => ipcRenderer.invoke('sync-duplicate-groups', groups),
   deleteFileItem: (targetPath, safeRecycleBin) => ipcRenderer.invoke('delete-file-item', targetPath, safeRecycleBin),
-  moveFileItem: (sourcePath, destDirPath) => ipcRenderer.invoke('move-file-item', sourcePath, destDirPath)
+  moveFileItem: (sourcePath, destDirPath) => ipcRenderer.invoke('move-file-item', sourcePath, destDirPath),
+  organizerListRules: () => ipcRenderer.invoke('organizer-list-rules'),
+  organizerSaveRule: (rule) => ipcRenderer.invoke('organizer-save-rule', rule),
+  organizerDeleteRule: (ruleId) => ipcRenderer.invoke('organizer-delete-rule', ruleId),
+  organizerPreview: (params) => ipcRenderer.invoke('organizer-preview', params),
+  organizerApply: (params) => ipcRenderer.invoke('organizer-apply', params),
+  organizerUndo: (batchId) => ipcRenderer.invoke('organizer-undo', batchId),
+  organizerGetHistory: () => ipcRenderer.invoke('organizer-get-history'),
+  organizerCleanEmptyFolders: (sourceDir) => ipcRenderer.invoke('organizer-clean-empty-folders', sourceDir),
+  organizerCheckWatchFolder: (watchPath) => ipcRenderer.invoke('organizer-check-watch-folder', watchPath)
 });

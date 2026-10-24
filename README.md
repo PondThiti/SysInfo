@@ -1,9 +1,53 @@
-# System Storage & Port Inspector (SysPulse)
+# SysInfo — System Storage, File Organizer & Port Inspector
 
-> **All-in-One PC Utility:** Storage Analyzer, Smart Junk Cleaner & Process/Port Inspector  
+> **All-in-One PC Utility (v0.10.3):** Storage Analyzer, Smart File Organizer (Rule Engine & Undo Journal), Junk Cleaner, Game Libraries Analyzer & Port Inspector  
 > **Platform:** Windows 10 / Windows 11 (x64), Linux, macOS  
-> **Format:** `.exe` (NSIS), `.zip` (Portable), `.msi` (Windows Installer), `.tar.gz` (Linux)  
-> **Output Location:** `C:\Users\zeroy\Desktop\MyProject\Apps\PC-App\`
+> **Executable:** `sysinfo.exe`  
+> **Distribution:** `.exe` (NSIS), `.zip` (Portable), `.msi` (Windows Installer), `.tar.gz` (Linux)  
+> **Repository:** `https://github.com/PondThiti/SysPulse.git`  
+> **Documentation & Wiki:** [`docs/wiki/Home.md`](./docs/wiki/Home.md)  
+
+---
+
+## 🌟 ฟีเจอร์ใหม่ในเวอร์ชัน 0.10.3 (What's New in v0.10.3)
+
+### 1. 🗂️ ระบบจัดระเบียบไฟล์อัจฉริยะ (Smart File Organizer)
+* **Rule Engine (กฎ "ถ้า → แล้ว"):** กรองตามนามสกุล, ประเภทไฟล์, ขนาด, วันที่, และโฟลเดอร์ต้นทาง
+* **พรีเซ็ตในตัว (Built-in Presets):**
+  * 📁 *จัดตามประเภทไฟล์ (By File Type):* แยก `Images/`, `Documents/`, `Videos/`, `Audio/`, `Archives/`, `Executables/`, `Code/`, `GameAssets/`
+  * 📅 *จัดตามปีและเดือน (By Date: YYYY/MM):* แยกตามช่วงเวลา เช่น `2026/10`
+  * 📥 *จัดระเบียบโฟลเดอร์ Downloads:* ล้างโฟลเดอร์ดาวน์โหลด แยกตามประเภทและปี
+  * 🛠️ *จัดระเบียบ Dev & Game Assets:* แยก Asset bundles, Source code, logs
+* **Template ปลายทาง:** รองรับตัวแปร `{type}`, `{ext}`, `{year}`, `{month}`, `{day}`, `{name}`, `{counter}`, `{size}`
+* **Dry-Run Preview:** ตารางแสดงตัวอย่าง "ต้นทาง → ปลายทาง" ให้ติ๊กเลือก/ยกเว้นรายไฟล์ก่อนลงมือย้ายจริง
+* **Conflict Handling ป้องกันเขียนทับ:** 
+  * เปลี่ยนชื่ออัตโนมัติ (`file (1).ext`)
+  * ข้ามไฟล์เดิม (Skip)
+  * **ตรวจ Hash อัตโนมัติ:** หากเนื้อหาซ้ำเป๊ะ 100% เสนอส่งสำเนาส่วนเกินลง Recycle Bin
+* **Undo Journal (หัวใจสำคัญ):** บันทึกทุกขั้นตอนลง Journal สามารถกด **"ย้อนกลับทั้งชุด (Undo Batch)"** คืนค่าไฟล์ทั้งหมดกลับตำแหน่งเดิมได้ 100% พร้อมคงค่า metadata วันที่แก้ไข (`mtime`)
+* **Bulk Rename:** รองรับการเปลี่ยนชื่อกลุ่มไฟล์พร้อมตาราง Live Preview
+* **Empty Folder Cleanup:** หลังย้ายไฟล์ ตรวจหาโฟลเดอร์ว่างเปล่าและให้ผู้ใช้กดลบได้ใน 1 คลิก
+* **Watch Folder (Recommendation Mode):** แจ้งเตือนแนะนำการจัดระเบียบเมื่อมีไฟล์สะสม ไม่ย้ายเองจนกว่าผู้ใช้จะสั่ง
+
+### 2. 🎨 ไอคอนเวกเตอร์ SVG ใหม่ (Modern App Icon)
+* อัปเดตไอคอนแอปพลิเคชันจาก `icon.svg` คุณภาพสูง
+* สร้างไฟล์ไอคอนแบบ Multi-resolution `.ico` (256x256, 128x128, 64x64, 48x48, 32x32, 16x16)
+* ผูกเข้ากับตัวโปรแกรม `sysinfo.exe`, Taskbar, Window Header, และตัวติดตั้ง MSI/NSIS
+
+### 3. 🛡️ สถาปัตยกรรมความปลอดภัยระดับสูง (Rust & Electron Backend)
+* **ย้ายข้ามไดรฟ์ปลอดภัย (Atomic Cross-Drive Move):** Copy → Verify (Size & SHA-256 Hash) → Delete Source
+* **ขอบเขต Path ปลอดภัย:** ห้ามกฎย้ายไฟล์เข้า/ออกจากโฟลเดอร์ระบบ (`C:\Windows`, `C:\Program Files`)
+* **ป้องกันโปรเจกต์นักพัฒนา:** ห้ามแยกไฟล์ในโฟลเดอร์ที่มี `.git`, `package.json`, `Cargo.toml`, `go.mod`
+* **รองรับ Windows Long Paths:** ป้องกันปัญหาพาธยาวเกิน 260 ตัวอักษร (`\\?\`) และชื่อไฟล์ต้องห้าม (`CON`, `PRN`, `AUX`, `NUL`)
+
+---
+
+## 📚 เอกสารวิกิบน GitHub (GitHub Wiki Documentation)
+
+* [🏠 หน้าหลักวิกิ (Wiki Home)](./docs/wiki/Home.md)
+* [🗂️ คู่มือระบบจัดระเบียบไฟล์ (File Organizer Guide)](./docs/wiki/File-Organizer-Guide.md)
+* [⚙️ กฎและตัวแปร Template (Rule Engine & Templates)](./docs/wiki/Rule-Engine-and-Templates.md)
+* [🛡️ สถาปัตยกรรมและความปลอดภัย (Architecture & Safety)](./docs/wiki/Architecture-and-Safety.md)
 
 ---
 
@@ -11,79 +55,25 @@
 
 ไฟล์ตัวติดตั้งถูกส่งออกไปยัง: [`C:\Users\zeroy\Desktop\MyProject\Apps\PC-App\`](file:///C:/Users/zeroy/Desktop/MyProject/Apps/PC-App/)
 
-1. **Windows NSIS Installer (`.exe`):**
-   - 📁 **ไฟล์:** `SystemStoragePortInspector_Setup.exe` (~84 MB)
-   - 🛡️ ติดตั้งง่าย เลือกโฟลเดอร์ได้ สร้าง Desktop & Start Menu Shortcut อัตโนมัติ
-
-2. **Windows Portable Archive (`.zip`):**
-   - 📁 **ไฟล์:** `SystemStoragePortInspector_Portable.zip` (~114 MB)
-   - 🚀 ไม่ต้องติดตั้ง แตกไฟล์แล้วเปิดใช้งานได้ทันที เหมาะสำหรับใส่ Flash Drive / USB
-
-3. **Windows MSI Installer (`.msi`):**
-   - 📁 **ไฟล์:** `SystemStoragePortInspector_Setup.msi` (~115 MB)
-   - 🏢 เหมาะสำหรับการ Deploy ผ่าน Group Policy (GPO) หรือองค์กร
-
-4. **Linux Application Package (`.tar.gz`):**
-   - 📁 **ไฟล์:** `SystemStoragePortInspector_Linux_x64.tar.gz` (~105 MB)
-   - 🐧 พร้อมใช้งานบน Ubuntu, Debian, Fedora, Arch Linux x64
-
-5. **macOS & Linux Automated Builds (GitHub Actions):**
-   - 🍎 รองรับการบิลด์ `.dmg`, `.zip` สำหรับ macOS และ `.AppImage`, `.deb` สำหรับ Linux ผ่าน GitHub Actions Workflow (`.github/workflows/build.yml`) อัตโนมัติทุกครั้งที่ Push ขึ้น Git
+1. **Windows NSIS Setup (`.exe`):** `SysInfo-Setup-0.10.3.exe` / `SysInfo_Setup.exe`
+2. **Windows Portable Archive (`.zip`):** `SysInfo-0.10.3-win.zip` / `SysInfo_Portable.zip`
+3. **Windows MSI Installer (`.msi`):** `SysInfo-Setup-0.10.3.msi` / `SysInfo_Setup.msi`
+4. **Linux Application Package (`.tar.gz`):** `SystemStoragePortInspector_Linux_x64.tar.gz`
 
 ---
 
-## ⚡ การเชื่อมต่อและเข้าถึงเครื่องจริง (Real Native System Integration)
-
-แอปพลิเคชันเชื่อมต่อกับฮาร์ดแวร์และระบบปฏิบัติการ Windows จริงโดยตรง:
-
-1. **Real Drive & Storage Overview:**
-   - ตรวจจับไดรฟ์จริงในเครื่อง (เช่น ไดรฟ์ C:, D:) อ่านพื้นที่ความจุรวม, พื้นที่ว่าง, เปอร์เซ็นต์การใช้งานจริง และระบบไฟล์ (NTFS) ผ่าน Win32 CIM/WMI
-2. **Real Live Hardware Telemetry:**
-   - ตรวจวัดการทำงานจริงของ CPU Load (%) และ RAM Usage (GB) แบบสดๆ ทุก 2.5 วินาที
-3. **Real Active Network Ports & Processes:**
-   - สแกนพอร์ต TCP/UDP ที่เปิดฟังการเชื่อมต่อจริงในเครื่อง (Listening / Established)
-   - ระบุหมายเลขพอร์ต, Protocol, PID, Process Name, Path ตัวโปรแกรมจริง, และการใช้ Memory
-   - สั่ง **Kill Process (PID)** ปิดโปรแกรมและคืนพอร์ตได้ทันทีด้วยคำสั่งระบบของ Windows
-4. **Real Junk & Cache Scanner:**
-   - ค้นหาโฟลเดอร์ไฟล์ขยะจริง เช่น `%TEMP%`, Windows Temp, WER Crash Dumps, แคชเบราว์เซอร์ (Chrome, Edge, Brave), Discord Cache และ Pip/Npm cache
-   - ระบบ **Safe Delete** สั่งย้ายไฟล์ลง Windows Recycle Bin ได้อย่างปลอดภัย หรือเลือกลบถาวร
-5. **Real Heavy Files Scanner:**
-   - สแกนค้นหาไฟล์ขนาดใหญ่ในไดเรกทอรีผู้ใช้จริง (Downloads, Documents, Desktop, Videos) พร้อมระบุนามสกุล ขนาด และวันที่แก้ไขจริง
-6. **Real Startup Apps Manager:**
-   - ดึงรายชื่อโปรแกรมที่ตั้งค่าให้เปิดพร้อม Windows จาก Registry (`HKCU` และ `HKLM` Run keys) จริงในเครื่อง
-
----
-
-## 🧹 ระบบถอนการติดตั้งที่ถูกต้องตามมาตรฐาน Windows (Clean Uninstaller)
-
-ไม่มีปุ่มถอนการติดตั้งภายในตัวแอปพลิเคชัน เพื่อความปลอดภัยตามมาตรฐานของระบบปฏิบัติการ โดยมีช่องทางการถอนการติดตั้งที่สะดวกและล้างไฟล์หมดจด 100%:
-
-1. **ถอนการติดตั้งผ่าน Windows Settings / Control Panel:**
-   - ไปที่ `Settings > Apps > Installed apps` (หรือค้นหา `Add or remove programs` ใน Windows) ค้นหา "System Storage & Port Inspector" แล้วคลิก `Uninstall`
-   - มีปุ่มทางลัดในแท็บ "การตั้งค่า (Settings)" ของแอปพลิเคชัน เพื่อเปิดหน้าต่าง Add/Remove Programs ของ Windows ทันที
-2. **ถอนการติดตั้งผ่าน `uninstall.bat`:**
-   - อยู่ในโฟลเดอร์ติดตั้งของโปรแกรม `C:\Program Files\System Storage & Port Inspector\uninstall.bat` ดับเบิ้ลคลิกเพื่อเริ่มถอนการติดตั้ง
-3. **ถอนการติดตั้งผ่าน Start Menu Shortcut:**
-   - มีช็อตคัต **"Uninstall System Storage & Port Inspector"** ใน Start Menu folder กดแล้วเริ่มการถอนการติดตั้งทันที
-
-### สิ่งที่ระบบทำการล้างแบบหมดจด:
-- ❌ ยุติโปรเซสที่กำลังทำงานอยู่
-- ❌ ลบไฟล์โปรแกรมทั้งหมดใน `C:\Program Files\System Storage & Port Inspector`
-- ❌ ลบทางลัดบน Desktop และ Start Menu
-- ❌ ล้างข้อมูลแคชใน `%APPDATA%\syspulse-system-inspector` และ `%LOCALAPPDATA%`
-- ❌ ล้างคีย์ Registry ใน `HKCU\Software\SysPulse`
-
----
-
-## 🛠️ คำสั่งสำหรับพัฒนาและสร้างตัวติดตั้งใหม่
+## 🛠️ คำสั่งสำหรับพัฒนาและบิลด์
 
 ```bash
-# ทดสอบเปิดใช้งานแอป
-npm start
+# ติดตั้ง dependencies
+npm install
 
-# รัน Vite Dev Server
+# รันโหมด Development
 npm run dev
 
-# บิลด์โค้ดและสร้างไฟล์ .msi ตัวติดตั้งส่งออกไปยัง PC-App
-npm run msi
+# คอมไพล์โปรเจกต์ (Production Build)
+npm run build
+
+# บิลด์ชุดติดตั้งทั้งหมด (.exe, .msi, .zip)
+npm run dist
 ```

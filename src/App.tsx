@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import FileOrganizerView from './components/FileOrganizerView';
 import {
   LayoutDashboard,
   HardDrive,
@@ -71,8 +72,9 @@ interface IpcLog {
 }
 
 export default function App() {
-  // Navigation tabs: 'dashboard' | 'storage' | 'cleaner' | 'ports' | 'settings'
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'storage' | 'cleaner' | 'ports' | 'settings'>('dashboard');
+  // Navigation tabs: 'dashboard' | 'storage' | 'organizer' | 'cleaner' | 'ports' | 'settings'
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'storage' | 'organizer' | 'cleaner' | 'ports' | 'settings'>('dashboard');
+  const [organizerDirectSourceDir, setOrganizerDirectSourceDir] = useState<string>('');
   const [storageSubTab, setStorageSubTab] = useState<'heavy' | 'duplicates' | 'games'>('heavy');
   const [portSubTab, setPortSubTab] = useState<'ports' | 'services' | 'background' | 'conflicts' | 'blockers' | 'startup'>('ports');
   const [gameLibrariesData, setGameLibrariesData] = useState<any>(null);
@@ -1350,7 +1352,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <span className="font-bold tracking-tight text-sm text-white">SysInfo</span>
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-medium">
-              v0.1.1 • SysInfo
+              v0.10.3 • SysInfo
             </span>
           </div>
           <span className="hidden md:inline-block text-xs text-slate-500 pl-2 border-l border-slate-800">
@@ -1491,6 +1493,32 @@ export default function App() {
                 }`}
               >
                 {largeFiles.length}
+              </span>
+            </button>
+
+            {/* Menu 2.5: File Organizer */}
+            <button
+              onClick={() => {
+                setActiveTab('organizer');
+                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                activeTab === 'organizer'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
+                  : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <FolderInput className="w-4 h-4 shrink-0" />
+                <div className="text-left">
+                  <div>จัดระเบียบไฟล์</div>
+                  <div className={`text-[11px] ${activeTab === 'organizer' ? 'text-indigo-200' : 'text-slate-500'}`}>
+                    File Organizer
+                  </div>
+                </div>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
+                New
               </span>
             </button>
 
@@ -2663,6 +2691,18 @@ export default function App() {
                                         <FolderInput className="w-3.5 h-3.5" />
                                       </button>
                                       <button
+                                        onClick={() => {
+                                          const parent = file.path.substring(0, file.path.lastIndexOf('\\'));
+                                          setOrganizerDirectSourceDir(parent);
+                                          setActiveTab('organizer');
+                                          mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                                        }}
+                                        className="p-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-600/30 text-indigo-400 hover:text-indigo-200 border border-indigo-500/20 transition"
+                                        title="จัดระเบียบโฟลเดอร์นี้ (File Organizer)"
+                                      >
+                                        <Sparkles className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
                                         onClick={() => setDeleteConfirmModal({ file })}
                                         className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600/30 hover:text-rose-300 text-slate-300 transition"
                                         title="ลบไฟล์นี้ (Delete File)"
@@ -2766,6 +2806,18 @@ export default function App() {
                                   title="ย้ายสำเนานี้ (Move File)"
                                 >
                                   <FolderInput className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const parent = copy.path.substring(0, copy.path.lastIndexOf('\\'));
+                                    setOrganizerDirectSourceDir(parent);
+                                    setActiveTab('organizer');
+                                    mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                                  }}
+                                  className="p-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-600/30 text-indigo-400 hover:text-indigo-200 border border-indigo-500/20 transition"
+                                  title="จัดระเบียบโฟลเดอร์นี้ (File Organizer)"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5" />
                                 </button>
                                 <button
                                   onClick={() => setDeleteConfirmModal({
@@ -3028,6 +3080,17 @@ export default function App() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* =================================================================
+              TAB 2.5: FILE ORGANIZER (จัดระเบียบไฟล์อัจฉริยะ)
+          ================================================================= */}
+          {activeTab === 'organizer' && (
+            <FileOrganizerView
+              initialSourceDir={organizerDirectSourceDir}
+              showToast={showToast}
+              systemDrives={systemDrives}
+            />
           )}
 
           {/* =================================================================
@@ -4987,13 +5050,13 @@ export default function App() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-white">ยืนยันการถอนการติดตั้ง</h3>
-                <p className="text-xs text-rose-300/80">SysInfo v0.1.1</p>
+                <p className="text-xs text-rose-300/80">SysInfo v0.10.3</p>
               </div>
             </div>
 
             <div className="text-xs text-slate-300 space-y-2 bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 leading-relaxed">
               <p>
-                คุณต้องการถอนการติดตั้งโปรแกรม <b>SysInfo (v0.1.1)</b> ออกจากเครื่องคอมพิวเตอร์ใช่หรือไม่?
+                คุณต้องการถอนการติดตั้งโปรแกรม <b>SysInfo (v0.10.3)</b> ออกจากเครื่องคอมพิวเตอร์ใช่หรือไม่?
               </p>
               <div className="text-[11px] text-emerald-400 bg-emerald-950/30 p-2.5 rounded-lg border border-emerald-500/20 space-y-1">
                 <p className="font-semibold flex items-center gap-1.5">

@@ -222,6 +222,43 @@ ipcMain.handle('move-file-item', async (_event, sourcePath, destDirPath) => {
   return await systemService.moveFileItem(sourcePath, destDirPath);
 });
 
+// Organizer IPC Handlers
+ipcMain.handle('organizer-list-rules', async () => {
+  return await systemService.organizerListRules();
+});
+
+ipcMain.handle('organizer-save-rule', async (_event, rule) => {
+  return await systemService.organizerSaveRule(rule);
+});
+
+ipcMain.handle('organizer-delete-rule', async (_event, ruleId) => {
+  return await systemService.organizerDeleteRule(ruleId);
+});
+
+ipcMain.handle('organizer-preview', async (_event, params) => {
+  return await systemService.organizerPreview(params);
+});
+
+ipcMain.handle('organizer-apply', async (_event, params) => {
+  return await systemService.organizerApply(params);
+});
+
+ipcMain.handle('organizer-undo', async (_event, batchId) => {
+  return await systemService.organizerUndo(batchId);
+});
+
+ipcMain.handle('organizer-get-history', async () => {
+  return await systemService.organizerGetHistory();
+});
+
+ipcMain.handle('organizer-clean-empty-folders', async (_event, sourceDir) => {
+  return await systemService.organizerCleanEmptyFolders(sourceDir);
+});
+
+ipcMain.handle('organizer-check-watch-folder', async (_event, watchPath) => {
+  return await systemService.organizerCheckWatchFolder(watchPath);
+});
+
 app.whenReady().then(() => {
   createWindow();
 

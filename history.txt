@@ -182,3 +182,56 @@ Update (2026-10-24): Game Files Access & Installer Fix (v0.1.1 & sysinfo.exe)
    - ลบไฟล์เวอร์ชันเก่า (v0.0.3) ออกจาก C:\Users\zeroy\Desktop\MyProject\Apps\PC-App\ อย่างหมดจด
    - ส่งออกไฟล์ตัวติดตั้ง v0.1.1 ตัวใหม่ทั้งหมดไปยัง C:\Users\zeroy\Desktop\MyProject\Apps\PC-App\
    - ตัวโปรแกรมเมื่อติดตั้งหรือรันจะเป็น sysinfo.exe และแสดงเวอร์ชัน v0.1.1 • SysInfo ครบทุกส่วนของโปรแกรม
+
+
+================================================================================
+Update (2026-10-25): Version 0.10.3 - Smart File Organizer, SVG Icon & Undo Journal
+================================================================================
+1. ระบบจัดระเบียบไฟล์อัจฉริยะ (Smart File Organizer):
+   - Rule Engine (กฎ "ถ้า -> แล้ว"):
+     * รองรับเงื่อนไขการกรอง: นามสกุลไฟล์, ชื่อไฟล์ (pattern/regex), ขนาดไฟล์, อายุไฟล์ (วัน/เวลาที่สร้างหรือแก้ไข), โฟลเดอร์ต้นทาง, หมวดหมู่ไฟล์
+     * Template ปลายทาง: รองรับตัวแปร {type}, {ext}, {year}, {month}, {day}, {name}, {counter}, {size}
+     * 4 พรีเซ็ตมาตรฐานในตัว: จัดตามประเภทไฟล์, จัดตามวันที่ (YYYY/MM), ล้างโฟลเดอร์ Downloads, จัดระเบียบ Dev & Game Assets
+   - ตารางแสดงตัวอย่างก่อนทำจริง (Dry-run Preview):
+     * แสดงเปรียบเทียบ "ไฟล์ต้นทาง -> ปลายทางใหม่"
+     * ติ๊กเลือก/ยกเว้นรายไฟล์ก่อนลงมือย้ายจริง
+     * แสดงสรุปจำนวนไฟล์, ขนาดรวม, จำนวนข้อขัดแย้ง (Conflicts), สำเนาซ้ำเป๊ะ (Hash Duplicates), และการย้ายข้ามไดรฟ์
+   - ระบบจัดการเมื่อชื่อซ้ำ (Conflict Handling & Hash Verification):
+     * ข้ามไฟล์เดิม (Skip)
+     * เปลี่ยนชื่ออัตโนมัติ (file (1).ext)
+     * เขียนทับ (Overwrite)
+     * คำนวณ SHA-256 Hash ตรวจสอบสำเนาซ้ำเป๊ะ และเสนอส่งสำเนาส่วนเกินลง Recycle Bin
+   - ระบบบันทึกการย้ายและย้อนกลับ (Undo Journal - หัวใจสำคัญ):
+     * บันทึกทุกชุดการย้าย (Batch ID, เวลา, โฟลเดอร์ต้นทาง, โฟลเดอร์ปลายทาง, รายการไฟล์, ขนาด, mtime เดิม, Hash)
+     * ปุ่ม 1-Click "↩️ ย้อนกลับทั้งชุด (Undo Batch)": คืนค่าไฟล์ทั้งหมดกลับตำแหน่งเดิมได้ 100% พร้อมคงค่า metadata mtime
+   - Bulk Rename: เปลี่ยนชื่อกลุ่มไฟล์ตามรูปแบบตัวแปร พร้อม Live Preview
+   - Empty Folder Cleanup: ตรวจหาโฟลเดอร์ว่างเปล่าหลังการย้ายไฟล์ และให้ผู้ใช้กดลบได้ทันที
+   - Watch Folder (โหมดแนะนำ): เฝ้าตรวจโฟลเดอร์สะสม เช่น Downloads และแจ้งเตือนแนะนำการจัดระเบียบ โดยไม่ย้ายอัตโนมัติ
+
+2. Backend Core (Rust & Electron System Service):
+   - สร้างโมดูล Rust Backend ใน src-tauri/:
+     * src-tauri/src/models/organizer.rs: OrganizeRule, OrganizePlanItem, OrganizeBatch, MoveRecord
+     * src-tauri/src/services/rule_repository.rs (SQLite persistence)
+     * src-tauri/src/services/move_service.rs (Atomic cross-drive move, hash verification, journal recording, undo)
+     * src-tauri/src/services/organizer_service.rs (Rule evaluation, template resolution, safety boundaries)
+     * src-tauri/src/commands/organizer.rs: list_organizer_rules, save_organizer_rule, preview_organize, apply_organize, undo_organize, get_organize_history, clean_empty_folders
+     * src-tauri/src/db/mod.rs (ตาราง SQLite: organizer_rules, organize_batches, move_records)
+   - ผูกระบบเข้ากับ Electron Backend (system-service.cjs, preload.cjs, main.cjs)
+
+3. มาตรการความปลอดภัยระดับระบบ (Technical Safety Standards):
+   - ย้ายข้ามไดรฟ์ปลอดภัย (Cross-drive move): Copy -> Verify (ขนาด & SHA-256 Hash) -> Delete Source ป้องกันไฟล์สูญหาย
+   - ตรวจสอบไฟล์ถูกล็อก/เปลี่ยนแปลงก่อนย้ายจริง (In-Use / EBUSY / PathChanged)
+   - ห้ามแตะต้องโฟลเดอร์ระบบ Windows (C:\Windows, C:\Program Files, ฯลฯ)
+   - ห้ามแยกไฟล์ในโฟลเดอร์โปรเจกต์นักพัฒนาที่มี .git, package.json, Cargo.toml, go.mod
+   - รองรับ Windows Long Paths (\\?\) เกิน 260 ตัวอักษร และชื่อไฟล์สงวน (CON, PRN, AUX, NUL)
+   - คงค่า metadata (mtime/atime) เสมอ
+
+4. อัปเดตไอคอนเวกเตอร์ SVG ใหม่ (Vector SVG Icon Integration):
+   - อัปเดตไอคอนแอปพลิเคชันจาก icon.svg
+   - คอมไพล์และสร้างไฟล์ไอคอน Multi-resolution .ico และ .png คุณภาพสูงใน build/, public/, electron/assets/, dist/
+   - ผูกเข้ากับ BrowserWindow, Taskbar, Header และชุดติดตั้ง MSI/NSIS
+
+5. อัปเดตสเปกและเอกสาร Wiki:
+   - อัปเดต System_Storage_Port_Inspector_Spec.md: §10 (API), §11 (Models), §12 (SQLite Tables), §15.3 (Safety Tests), §15.4 (Acceptance Criteria), Phase 4.5 (File Organizer)
+   - สร้างเอกสารวิกิบน GitHub ใน docs/wiki/ (Home.md, File-Organizer-Guide.md, Rule-Engine-and-Templates.md, Architecture-and-Safety.md)
+   - อัปเดตเวอร์ชันเป็น v0.10.3 ใน package.json, package-lock.json, wix/Product.wxs, App.tsx, README.md
