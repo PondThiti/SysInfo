@@ -2,8 +2,11 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+const version = pkg.version || '0.10.3';
+
 console.log('====================================================');
-console.log('   Building SysInfo v0.1.1 Distribution Packages    ');
+console.log(`   Building SysInfo v${version} Distribution Packages    `);
 console.log('====================================================\n');
 
 const targetDir = 'C:\\Users\\zeroy\\Desktop\\MyProject\\Apps\\PC-App';
@@ -26,13 +29,16 @@ execSync('node scripts/build-msi.mjs', { stdio: 'inherit' });
 // 4. Export all artifacts to PC-App
 console.log(`\n4. Exporting and synchronizing artifacts to ${targetDir}...`);
 
-// Cleanup old names in PC-App so user is never confused
+// Cleanup old files in PC-App
 const oldFiles = [
   'System Storage & Port Inspector Setup.exe',
   'System Storage & Port Inspector Setup 0.0.3.exe',
   'SystemStoragePortInspector_Setup.msi',
   'System Storage & Port Inspector-win.zip',
-  'System Storage & Port Inspector-0.0.3-win.zip'
+  'System Storage & Port Inspector-0.0.3-win.zip',
+  'SysInfo-Setup-0.1.1.exe',
+  'SysInfo-0.1.1-win.zip',
+  'SysInfo-Setup-0.1.1.msi'
 ];
 for (const oldFile of oldFiles) {
   const p = path.join(targetDir, oldFile);
@@ -45,26 +51,28 @@ for (const oldFile of oldFiles) {
 }
 
 // Copy NSIS Setup .exe
-if (fs.existsSync('release/SysInfo-Setup-0.1.1.exe')) {
-  fs.copyFileSync('release/SysInfo-Setup-0.1.1.exe', path.join(targetDir, 'SysInfo_Setup.exe'));
-  fs.copyFileSync('release/SysInfo-Setup-0.1.1.exe', path.join(targetDir, 'SysInfo-Setup-0.1.1.exe'));
-  console.log('  -> Copied SysInfo_Setup.exe & SysInfo-Setup-0.1.1.exe');
+const nsisFile = `release/SysInfo-Setup-${version}.exe`;
+if (fs.existsSync(nsisFile)) {
+  fs.copyFileSync(nsisFile, path.join(targetDir, 'SysInfo_Setup.exe'));
+  fs.copyFileSync(nsisFile, path.join(targetDir, `SysInfo-Setup-${version}.exe`));
+  console.log(`  -> Copied SysInfo_Setup.exe & SysInfo-Setup-${version}.exe`);
 }
 
 // Copy Portable .zip
-if (fs.existsSync('release/SysInfo-0.1.1-win.zip')) {
-  fs.copyFileSync('release/SysInfo-0.1.1-win.zip', path.join(targetDir, 'SysInfo_Portable.zip'));
-  fs.copyFileSync('release/SysInfo-0.1.1-win.zip', path.join(targetDir, 'SysInfo-0.1.1-win.zip'));
-  console.log('  -> Copied SysInfo_Portable.zip & SysInfo-0.1.1-win.zip');
+const zipFile = `release/SysInfo-${version}-win.zip`;
+if (fs.existsSync(zipFile)) {
+  fs.copyFileSync(zipFile, path.join(targetDir, 'SysInfo_Portable.zip'));
+  fs.copyFileSync(zipFile, path.join(targetDir, `SysInfo-${version}-win.zip`));
+  console.log(`  -> Copied SysInfo_Portable.zip & SysInfo-${version}-win.zip`);
 }
 
 // Copy MSI
 if (fs.existsSync('release/SysInfo_Setup.msi')) {
   fs.copyFileSync('release/SysInfo_Setup.msi', path.join(targetDir, 'SysInfo_Setup.msi'));
-  fs.copyFileSync('release/SysInfo_Setup.msi', path.join(targetDir, 'SysInfo-Setup-0.1.1.msi'));
-  console.log('  -> Copied SysInfo_Setup.msi & SysInfo-Setup-0.1.1.msi');
+  fs.copyFileSync('release/SysInfo_Setup.msi', path.join(targetDir, `SysInfo-Setup-${version}.msi`));
+  console.log(`  -> Copied SysInfo_Setup.msi & SysInfo-Setup-${version}.msi`);
 }
 
 console.log('\n====================================================');
-console.log('   All v0.1.1 Installers Successfully Exported!     ');
+console.log(`   All v${version} Installers Successfully Exported!     `);
 console.log('====================================================\n');
