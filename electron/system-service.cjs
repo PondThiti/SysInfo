@@ -2347,7 +2347,7 @@ async function inspectFiles(filePaths) {
 }
 
 // ==============================================================================
-// FILE ORGANIZER ENGINE (v0.10.3)
+// FILE ORGANIZER ENGINE (v0.1.2)
 // Rule Engine, Dry-run Preview, Conflict Handling, Safe Cross-Drive Move & Undo Journal
 // ==============================================================================
 

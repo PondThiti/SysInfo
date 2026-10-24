@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-const version = pkg.version || '0.10.3';
+const version = pkg.version || '0.1.2';
 
 console.log('====================================================');
 console.log(`   Building SysInfo v${version} Distribution Packages    `);
@@ -29,24 +29,22 @@ execSync('node scripts/build-msi.mjs', { stdio: 'inherit' });
 // 4. Export all artifacts to PC-App
 console.log(`\n4. Exporting and synchronizing artifacts to ${targetDir}...`);
 
-// Cleanup old files in PC-App
-const oldFiles = [
-  'System Storage & Port Inspector Setup.exe',
-  'System Storage & Port Inspector Setup 0.0.3.exe',
-  'SystemStoragePortInspector_Setup.msi',
-  'System Storage & Port Inspector-win.zip',
-  'System Storage & Port Inspector-0.0.3-win.zip',
-  'SysInfo-Setup-0.1.1.exe',
-  'SysInfo-0.1.1-win.zip',
-  'SysInfo-Setup-0.1.1.msi'
-];
-for (const oldFile of oldFiles) {
-  const p = path.join(targetDir, oldFile);
-  if (fs.existsSync(p)) {
-    try {
-      fs.unlinkSync(p);
-      console.log(`  - Removed obsolete file: ${oldFile}`);
-    } catch (e) {}
+// Cleanup old files in PC-App (remove old versions and legacy naming)
+if (fs.existsSync(targetDir)) {
+  const dirFiles = fs.readdirSync(targetDir);
+  for (const f of dirFiles) {
+    // If it's a versioned SysInfo file with different version, or an obsolete app file, remove it
+    const isOldVersionSysInfo = /^(SysInfo-Setup-|SysInfo-)[0-9]+\.[0-9]+(\.[0-9]+)?.*(\.exe|\.msi|\.zip)$/i.test(f) && !f.includes(version);
+    const isLegacyApp = /SystemStorage|System Storage/i.test(f);
+    if (isOldVersionSysInfo || isLegacyApp) {
+      const p = path.join(targetDir, f);
+      try {
+        fs.unlinkSync(p);
+        console.log(`  - Removed obsolete file: ${f}`);
+      } catch (e) {
+        console.error(`  ! Failed to remove ${f}: ${e.message}`);
+      }
+    }
   }
 }
 
