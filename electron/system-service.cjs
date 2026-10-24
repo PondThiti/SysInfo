@@ -614,6 +614,185 @@ async function scanRealJunk() {
     });
   }
 
+  // 5. Game Caches & Shader Cache (แคชเกมและตัวเร่งกราฟิก 3D)
+  const gameCategory = {
+    id: 'game_caches',
+    title: '5. Game Caches & Shader Cache (แคชเกมและตัวเร่งกราฟิก 3D)',
+    description: 'ไฟล์ Shader Cache และ Logs ชั่วคราวของเกมและลอนเชอร์ ลบเพื่อคืนพื้นที่ได้ปลอดภัย',
+    badge: '🎮 เกมเมอร์',
+    badgeColor: 'rose',
+    expanded: true,
+    items: []
+  };
+
+  // DirectX Shader Cache
+  const d3dCache = getFolderStats(path.join(localAppData, 'D3DSCache'), 2);
+  if (d3dCache && d3dCache.count > 0) {
+    gameCategory.items.push({
+      id: 'j_d3d_shader',
+      name: 'DirectX 3D Shader Cache (D3DSCache)',
+      path: d3dCache.path,
+      sizeMB: d3dCache.sizeMB,
+      lastModified: 'วันนี้',
+      selected: true,
+      fileCount: d3dCache.count
+    });
+  }
+
+  // NVIDIA Shader Cache
+  const nvDxCache = getFolderStats(path.join(localAppData, 'NVIDIA/DXCache'), 2);
+  if (nvDxCache && nvDxCache.count > 0) {
+    gameCategory.items.push({
+      id: 'j_nv_dxcache',
+      name: 'NVIDIA DirectX Shader Cache (DXCache)',
+      path: nvDxCache.path,
+      sizeMB: nvDxCache.sizeMB,
+      lastModified: 'วันนี้',
+      selected: true,
+      fileCount: nvDxCache.count
+    });
+  }
+
+  const nvGlCache = getFolderStats(path.join(localAppData, 'NVIDIA/GLCache'), 2);
+  if (nvGlCache && nvGlCache.count > 0) {
+    gameCategory.items.push({
+      id: 'j_nv_glcache',
+      name: 'NVIDIA OpenGL Shader Cache (GLCache)',
+      path: nvGlCache.path,
+      sizeMB: nvGlCache.sizeMB,
+      lastModified: 'วันนี้',
+      selected: true,
+      fileCount: nvGlCache.count
+    });
+  }
+
+  // AMD Shader Cache
+  const amdDxCache = getFolderStats(path.join(localAppData, 'AMD/DxCache'), 2);
+  if (amdDxCache && amdDxCache.count > 0) {
+    gameCategory.items.push({
+      id: 'j_amd_dxcache',
+      name: 'AMD Radeon DirectX Shader Cache',
+      path: amdDxCache.path,
+      sizeMB: amdDxCache.sizeMB,
+      lastModified: 'วันนี้',
+      selected: true,
+      fileCount: amdDxCache.count
+    });
+  }
+
+  // Steam Download & Web Cache
+  const steamHtmlCache = getFolderStats(path.join(localAppData, 'Steam/htmlcache'), 2);
+  if (steamHtmlCache && steamHtmlCache.count > 0) {
+    gameCategory.items.push({
+      id: 'j_steam_html',
+      name: 'Steam HTML Web Cache & Browser Cookies',
+      path: steamHtmlCache.path,
+      sizeMB: steamHtmlCache.sizeMB,
+      lastModified: 'วันนี้',
+      selected: true,
+      fileCount: steamHtmlCache.count
+    });
+  }
+
+  const steamDownloading = getFolderStats('C:\\Program Files (x86)\\Steam\\steamapps\\downloading', 2);
+  if (steamDownloading && steamDownloading.count > 0) {
+    gameCategory.items.push({
+      id: 'j_steam_downloading',
+      name: 'Steam Incomplete / Temp Downloads Cache',
+      path: steamDownloading.path,
+      sizeMB: steamDownloading.sizeMB,
+      lastModified: 'เร็วๆ นี้',
+      selected: true,
+      fileCount: steamDownloading.count
+    });
+  }
+
+  // Riot Games & VALORANT Logs & Crashes
+  const riotClientLogs = getFolderStats(path.join(localAppData, 'Riot Games/Riot Client/Logs'), 1);
+  if (riotClientLogs && riotClientLogs.count > 0) {
+    gameCategory.items.push({
+      id: 'j_riot_logs',
+      name: 'Riot Client Connection & Diagnostic Logs',
+      path: riotClientLogs.path,
+      sizeMB: riotClientLogs.sizeMB,
+      lastModified: 'วันนี้',
+      selected: true,
+      fileCount: riotClientLogs.count
+    });
+  }
+
+  const valSavedLogs = getFolderStats('C:\\Riot Games\\VALORANT\\live\\ShooterGame\\Saved\\Logs', 1);
+  if (valSavedLogs && valSavedLogs.count > 0) {
+    gameCategory.items.push({
+      id: 'j_val_logs',
+      name: 'VALORANT Engine Logs & Telemetry Dumps',
+      path: valSavedLogs.path,
+      sizeMB: valSavedLogs.sizeMB,
+      lastModified: 'วันนี้',
+      selected: true,
+      fileCount: valSavedLogs.count
+    });
+  }
+
+  const valCrashes = getFolderStats('C:\\Riot Games\\VALORANT\\live\\ShooterGame\\Saved\\Crashes', 1);
+  if (valCrashes && valCrashes.count > 0) {
+    gameCategory.items.push({
+      id: 'j_val_crashes',
+      name: 'VALORANT Unreal Crash Reports & Minidumps',
+      path: valCrashes.path,
+      sizeMB: valCrashes.sizeMB,
+      lastModified: 'เร็วๆ นี้',
+      selected: true,
+      fileCount: valCrashes.count
+    });
+  }
+
+  // Epic Games Launcher Web Cache & Logs
+  const epicWebCache = getFolderStats(path.join(localAppData, 'EpicGamesLauncher/Saved/webcache'), 2);
+  if (epicWebCache && epicWebCache.count > 0) {
+    gameCategory.items.push({
+      id: 'j_epic_cache',
+      name: 'Epic Games Launcher CEF Web Cache',
+      path: epicWebCache.path,
+      sizeMB: epicWebCache.sizeMB,
+      lastModified: 'วันนี้',
+      selected: true,
+      fileCount: epicWebCache.count
+    });
+  }
+
+  // Roblox Logs & Temp
+  const robloxLogs = getFolderStats(path.join(localAppData, 'Roblox/logs'), 1);
+  if (robloxLogs && robloxLogs.count > 0) {
+    gameCategory.items.push({
+      id: 'j_roblox_logs',
+      name: 'Roblox Client Crash Logs & Session Cache',
+      path: robloxLogs.path,
+      sizeMB: robloxLogs.sizeMB,
+      lastModified: 'วันนี้',
+      selected: true,
+      fileCount: robloxLogs.count
+    });
+  }
+
+  // GRYPHLINK (Arknights Endfield) Crash Logs
+  const gryphLogs = getFolderStats('C:\\Program Files\\GRYPHLINK\\CrashSightLog', 1);
+  if (gryphLogs && gryphLogs.count > 0) {
+    gameCategory.items.push({
+      id: 'j_gryph_logs',
+      name: 'GRYPHLINK CrashSight Logs & Dumps',
+      path: gryphLogs.path,
+      sizeMB: gryphLogs.sizeMB,
+      lastModified: 'เร็วๆ นี้',
+      selected: true,
+      fileCount: gryphLogs.count
+    });
+  }
+
+  if (gameCategory.items.length > 0) {
+    categories.push(gameCategory);
+  }
+
   return categories;
 }
 
@@ -780,8 +959,225 @@ async function cleanJunkItems(items, safeRecycleBin = true) {
   };
 }
 
-// 10. Scan Real Large Files & Dynamic Real Directory Treemap
+// 9.5 Detect Game Roots & Libraries (เข้าถึงโฟลเดอร์เกมทั้งหมดในเครื่อง)
+function getDetectedGameRoots() {
+  const roots = [];
+  const localAppData = process.env.LOCALAPPDATA || '';
+  const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
+  const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+
+  // 1. Steam paths (common and extra libraries from libraryfolders.vdf)
+  const standardSteamCommon = path.join(programFilesX86, 'Steam', 'steamapps', 'common');
+  if (fs.existsSync(standardSteamCommon)) roots.push({ path: standardSteamCommon, launcher: 'Steam' });
+
+  const vdfPath = path.join(programFilesX86, 'Steam', 'steamapps', 'libraryfolders.vdf');
+  if (fs.existsSync(vdfPath)) {
+    try {
+      const vdfContent = fs.readFileSync(vdfPath, 'utf8');
+      const lines = vdfContent.split(/\r?\n/);
+      for (const line of lines) {
+        const m = line.match(/"path"\s+"([^"]+)"/);
+        if (m && m[1]) {
+          const cleanPath = m[1].replace(/\\\\/g, '\\');
+          const extraCommon = path.join(cleanPath, 'steamapps', 'common');
+          if (fs.existsSync(extraCommon) && !roots.some(r => r.path.toLowerCase() === extraCommon.toLowerCase())) {
+            roots.push({ path: extraCommon, launcher: 'Steam' });
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 2. Riot Games (VALORANT, League of Legends, Riot Client)
+  const riotPaths = ['C:\\Riot Games', 'D:\\Riot Games', 'E:\\Riot Games'];
+  for (const rp of riotPaths) {
+    if (fs.existsSync(rp) && !roots.some(r => r.path.toLowerCase() === rp.toLowerCase())) {
+      roots.push({ path: rp, launcher: 'Riot Games' });
+    }
+  }
+
+  // 3. Epic Games
+  const epicPaths = [
+    path.join(programFiles, 'Epic Games'),
+    path.join(programFilesX86, 'Epic Games'),
+    'C:\\Epic Games',
+    'D:\\Epic Games'
+  ];
+  for (const ep of epicPaths) {
+    if (fs.existsSync(ep) && !roots.some(r => r.path.toLowerCase() === ep.toLowerCase())) {
+      roots.push({ path: ep, launcher: 'Epic Games' });
+    }
+  }
+
+  // 4. GRYPHLINK / Arknights Endfield
+  const gryphPaths = [
+    path.join(programFiles, 'GRYPHLINK', 'games'),
+    path.join(programFilesX86, 'GRYPHLINK', 'games')
+  ];
+  for (const gp of gryphPaths) {
+    if (fs.existsSync(gp) && !roots.some(r => r.path.toLowerCase() === gp.toLowerCase())) {
+      roots.push({ path: gp, launcher: 'Gryphline' });
+    }
+  }
+
+  // 5. Roblox
+  const robloxPath = path.join(localAppData, 'Roblox');
+  if (fs.existsSync(robloxPath)) {
+    roots.push({ path: robloxPath, launcher: 'Roblox' });
+  }
+
+  // 6. Generic Game Folders across drives (C:\Games, D:\Games, C:\XboxGames, etc.)
+  for (const drv of ['C:', 'D:', 'E:', 'F:']) {
+    for (const sub of ['Games', 'XboxGames', 'GOG Games', 'SteamLibrary\\steamapps\\common']) {
+      const p = path.join(drv, sub);
+      if (fs.existsSync(p) && !roots.some(r => r.path.toLowerCase() === p.toLowerCase())) {
+        roots.push({ path: p, launcher: 'Other Games' });
+      }
+    }
+  }
+
+  return roots;
+}
+
+// 9.6 Scan Game Libraries & Individual Games Storage Footprint
+async function scanGameLibraries() {
+  const roots = getDetectedGameRoots();
+  const games = [];
+  const topGameFiles = [];
+
+  for (const root of roots) {
+    if (!fs.existsSync(root.path)) continue;
+
+    if (root.launcher === 'Roblox') {
+      let totalBytes = 0;
+      let count = 0;
+      let largest = { name: '', path: '', sizeMB: 0 };
+      function walkRoblox(cur, depth = 0) {
+        if (depth > 4) return;
+        try {
+          const entries = fs.readdirSync(cur, { withFileTypes: true });
+          for (const ent of entries) {
+            const p = path.join(cur, ent.name);
+            if (ent.isDirectory()) walkRoblox(p, depth + 1);
+            else if (ent.isFile()) {
+              const st = fs.statSync(p);
+              totalBytes += st.size;
+              count++;
+              const sMB = Number((st.size / 1048576).toFixed(1));
+              if (sMB > largest.sizeMB) largest = { name: ent.name, path: p, sizeMB: sMB };
+              if (sMB >= 50) {
+                topGameFiles.push({
+                  name: ent.name,
+                  path: p,
+                  sizeMB: sMB,
+                  game: 'Roblox Player',
+                  drive: p.substring(0, 2).toUpperCase()
+                });
+              }
+            }
+          }
+        } catch (e) {}
+      }
+      walkRoblox(root.path);
+      if (totalBytes > 0) {
+        games.push({
+          id: 'game_roblox',
+          name: 'Roblox Player',
+          launcher: 'Roblox',
+          installPath: root.path,
+          sizeMB: Number((totalBytes / 1048576).toFixed(1)),
+          sizeGB: Number((totalBytes / (1024 * 1024 * 1024)).toFixed(2)),
+          fileCount: count,
+          drive: root.path.substring(0, 2).toUpperCase(),
+          largestFile: largest
+        });
+      }
+      continue;
+    }
+
+    try {
+      const items = fs.readdirSync(root.path, { withFileTypes: true });
+      for (const item of items) {
+        if (!item.isDirectory()) continue;
+        const gameFolder = path.join(root.path, item.name);
+
+        let totalBytes = 0;
+        let count = 0;
+        let largest = { name: '', path: '', sizeMB: 0 };
+
+        function walk(cur, depth = 0) {
+          if (depth > 5) return;
+          try {
+            const entries = fs.readdirSync(cur, { withFileTypes: true });
+            for (const ent of entries) {
+              const p = path.join(cur, ent.name);
+              if (ent.isDirectory()) {
+                walk(p, depth + 1);
+              } else if (ent.isFile()) {
+                const st = fs.statSync(p);
+                totalBytes += st.size;
+                count++;
+                const sMB = Number((st.size / 1048576).toFixed(1));
+                if (sMB > largest.sizeMB) largest = { name: ent.name, path: p, sizeMB: sMB };
+                if (sMB >= 80) {
+                  topGameFiles.push({
+                    name: ent.name,
+                    path: p,
+                    sizeMB: sMB,
+                    game: item.name,
+                    drive: p.substring(0, 2).toUpperCase()
+                  });
+                }
+              }
+            }
+          } catch (e) {}
+        }
+
+        walk(gameFolder);
+
+        if (totalBytes > 10 * 1048576) {
+          games.push({
+            id: `game_${games.length}_${item.name.replace(/[^a-zA-Z0-9]/g, '_')}`,
+            name: item.name,
+            launcher: root.launcher,
+            installPath: gameFolder,
+            sizeMB: Number((totalBytes / 1048576).toFixed(1)),
+            sizeGB: Number((totalBytes / (1024 * 1024 * 1024)).toFixed(2)),
+            fileCount: count,
+            drive: gameFolder.substring(0, 2).toUpperCase(),
+            largestFile: largest
+          });
+        }
+      }
+    } catch (e) {}
+  }
+
+  games.sort((a, b) => b.sizeMB - a.sizeMB);
+  topGameFiles.sort((a, b) => b.sizeMB - a.sizeMB);
+
+  const totalSizeMB = games.reduce((acc, g) => acc + g.sizeMB, 0);
+  const totalSizeGB = Number((totalSizeMB / 1024).toFixed(2));
+
+  return {
+    games,
+    totalGamesSizeGB: totalSizeGB,
+    totalGamesSizeMB: Number(totalSizeMB.toFixed(1)),
+    gameCount: games.length,
+    topGameFiles: topGameFiles.slice(0, 60)
+  };
+}
+
+// 10. Scan Real Large Files & Dynamic Real Directory Treemap (พร้อมรองรับไฟล์เกมขนาดใหญ่)
 async function scanLargeFiles(driveLetter = 'C:', minSizeMB = 25, depth = 4) {
+  // 1. Get detected games and top game files
+  let gameScanResult = null;
+  try {
+    gameScanResult = await scanGameLibraries();
+  } catch (e) {}
+
+  const detectedRoots = getDetectedGameRoots().map(r => r.path);
+  const gameSearchPathsStr = detectedRoots.map(p => `"${p.replace(/\\/g, '\\\\')}"`).join(', ');
+
   const script = `
     $searchPaths = @(
       "$($env:USERPROFILE)\\Downloads",
@@ -791,8 +1187,10 @@ async function scanLargeFiles(driveLetter = 'C:', minSizeMB = 25, depth = 4) {
       "$($env:LOCALAPPDATA)",
       "C:\\Program Files",
       "C:\\Program Files (x86)",
-      "C:\\ProgramData"
-    ) | Where-Object { Test-Path $_ }
+      "C:\\ProgramData",
+      "C:\\Riot Games",
+      ${gameSearchPathsStr || '""'}
+    ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
 
     # If specific drive letter requested and not C:, add its root
     $drv = "${driveLetter}".Trim();
@@ -803,7 +1201,7 @@ async function scanLargeFiles(driveLetter = 'C:', minSizeMB = 25, depth = 4) {
     $files = Get-ChildItem -Path $searchPaths -File -Recurse -Depth ${depth} -ErrorAction SilentlyContinue |
       Where-Object { $_.Length -gt ${minSizeMB}MB } |
       Sort-Object Length -Descending |
-      Select-Object -First 45 Name, FullName, Length, LastWriteTime
+      Select-Object -First 60 Name, FullName, Length, LastWriteTime
 
     # Compute top directory breakdown for dynamic Treemap
     $dirMap = @{}
@@ -824,7 +1222,7 @@ async function scanLargeFiles(driveLetter = 'C:', minSizeMB = 25, depth = 4) {
         Count = $dirMap[$k].Count
       }
     }
-    $sortedDirs = $breakdowns | Sort-Object SizeMB -Descending | Select-Object -First 8
+    $sortedDirs = $breakdowns | Sort-Object SizeMB -Descending | Select-Object -First 10
 
     # Find potential duplicate files by matching identical file size (> 1MB)
     $dupGroups = $files | Group-Object Length | Where-Object { $_.Count -gt 1 -and [int64]$_.Name -gt 1048576 } | Select-Object -First 6
@@ -861,13 +1259,55 @@ async function scanLargeFiles(driveLetter = 'C:', minSizeMB = 25, depth = 4) {
   `;
 
   const res = await runPowerShell(script);
-  if (!res.success || !res.data) {
-    return { files: [], directoryBreakdown: [], duplicates: [] };
+  let rawFiles = [];
+  let rawDirs = [];
+  let rawDups = [];
+
+  if (res.success && res.data) {
+    rawFiles = Array.isArray(res.data.Files) ? res.data.Files : (res.data.Files ? [res.data.Files] : []);
+    rawDirs = Array.isArray(res.data.Directories) ? res.data.Directories : (res.data.Directories ? [res.data.Directories] : []);
+    rawDups = Array.isArray(res.data.Duplicates) ? res.data.Duplicates : (res.data.Duplicates ? [res.data.Duplicates] : []);
   }
 
-  const rawFiles = Array.isArray(res.data.Files) ? res.data.Files : (res.data.Files ? [res.data.Files] : []);
-  const rawDirs = Array.isArray(res.data.Directories) ? res.data.Directories : (res.data.Directories ? [res.data.Directories] : []);
-  const rawDups = Array.isArray(res.data.Duplicates) ? res.data.Duplicates : (res.data.Duplicates ? [res.data.Duplicates] : []);
+  // Merge top game files if available
+  const seenPaths = new Set(rawFiles.map(f => (f.Path || '').toLowerCase()));
+  if (gameScanResult && gameScanResult.topGameFiles) {
+    for (const gf of gameScanResult.topGameFiles) {
+      if (!seenPaths.has(gf.path.toLowerCase())) {
+        seenPaths.add(gf.path.toLowerCase());
+        rawFiles.push({
+          Name: gf.name,
+          Path: gf.path,
+          SizeMB: gf.sizeMB,
+          LastModified: 'เมื่อเร็วๆ นี้ (ไฟล์เกม)',
+          isGameFile: true
+        });
+      }
+    }
+  }
+
+  // Also ensure game folders are represented in directories breakdown if large
+  if (gameScanResult && gameScanResult.games) {
+    for (const g of gameScanResult.games) {
+      if (g.sizeMB >= 500 && !rawDirs.some(d => (d.Path || '').toLowerCase() === g.installPath.toLowerCase())) {
+        rawDirs.push({
+          Path: g.installPath,
+          SizeMB: g.sizeMB,
+          Count: g.fileCount
+        });
+      }
+    }
+  }
+
+  // Sort rawDirs by SizeMB descending
+  rawDirs.sort((a, b) => (b.SizeMB || 0) - (a.SizeMB || 0));
+
+  const GAME_EXTENSIONS = new Set([
+    '.pak', '.ucas', '.utoc', '.starpak', '.vpk', '.bundle', '.assets', '.unity3d',
+    '.res', '.wad', '.rpf', '.bik', '.bk2', '.forge', '.bsp', '.ba2', '.bsa',
+    '.dat', '.obb', '.cas', '.cpk', '.wem', '.bnk', '.umap', '.uasset', '.scs',
+    '.big', '.npk', '.sarc', '.pck', '.arc', '.bdt', '.bhd', '.xpak', '.chk'
+  ]);
 
   const colorPalette = [
     'from-rose-600/90 to-rose-800/90 border-rose-400/40',
@@ -875,21 +1315,24 @@ async function scanLargeFiles(driveLetter = 'C:', minSizeMB = 25, depth = 4) {
     'from-amber-600/90 to-orange-800/90 border-amber-400/40',
     'from-emerald-600/90 to-teal-800/90 border-emerald-400/40',
     'from-sky-600/90 to-blue-800/90 border-sky-400/40',
+    'from-fuchsia-600/90 to-pink-800/90 border-fuchsia-400/40',
     'from-slate-600/90 to-slate-800/90 border-slate-400/40',
-    'from-pink-600/90 to-rose-900/90 border-pink-400/40',
     'from-cyan-600/90 to-blue-900/90 border-cyan-400/40'
   ];
 
   const totalDirMB = rawDirs.reduce((acc, d) => acc + (d.SizeMB || 0), 0) || 1;
 
-  const directoryBreakdown = rawDirs.map((d, idx) => {
+  const directoryBreakdown = rawDirs.slice(0, 10).map((d, idx) => {
     const sizeGB = Number((d.SizeMB / 1024).toFixed(2));
     const percent = Math.max(1, Math.round((d.SizeMB / totalDirMB) * 100));
     const drive = d.Path.substring(0, 2).toUpperCase();
     const folderName = path.basename(d.Path) || d.Path;
 
     let badge = 'Directory';
-    if (d.Path.includes('Program Files')) badge = 'Applications';
+    const lowPath = (d.Path || '').toLowerCase();
+    if (lowPath.includes('steamapps') || lowPath.includes('riot games') || lowPath.includes('epic games') || lowPath.includes('gryphlink') || lowPath.includes('roblox') || lowPath.includes('\\games')) {
+      badge = '🎮 Game Library / Game Files';
+    } else if (d.Path.includes('Program Files')) badge = 'Applications';
     else if (d.Path.includes('Videos')) badge = 'Media / Video';
     else if (d.Path.includes('Downloads')) badge = 'Downloads';
     else if (d.Path.includes('AppData')) badge = 'AppData';
@@ -909,14 +1352,27 @@ async function scanLargeFiles(driveLetter = 'C:', minSizeMB = 25, depth = 4) {
     };
   });
 
+  // Sort files by size descending
+  rawFiles.sort((a, b) => (b.SizeMB || 0) - (a.SizeMB || 0));
+
   const files = rawFiles.map((f, idx) => {
     const ext = path.extname(f.Name).toLowerCase();
+    const lowPath = (f.Path || '').toLowerCase();
+
     let category = 'Other Document';
-    if (['.mp4', '.mkv', '.avi', '.mov', '.wav', '.mp3'].includes(ext)) category = 'Media / Video';
-    else if (['.iso', '.zip', '.tar', '.gz', '.7z', '.rar', '.cab'].includes(ext)) category = 'Archive / ISO';
-    else if (['.exe', '.msi', '.apk', '.dll', '.nvph'].includes(ext)) category = 'Installer / Binary';
-    else if (['.parquet', '.csv', '.json', '.sql', '.db'].includes(ext)) category = 'Database / AI Data';
-    else if (['.ts', '.tsx', '.rs', '.py', '.js', '.asar'].includes(ext)) category = 'Dev Artifact / Code';
+    if (GAME_EXTENSIONS.has(ext) || lowPath.includes('steamapps') || lowPath.includes('riot games') || lowPath.includes('epic games') || lowPath.includes('gryphlink') || lowPath.includes('endfield') || lowPath.includes('roblox') || lowPath.includes('\\games')) {
+      category = '🎮 Game / Game Asset';
+    } else if (['.mp4', '.mkv', '.avi', '.mov', '.wav', '.mp3'].includes(ext)) {
+      category = 'Media / Video';
+    } else if (['.iso', '.zip', '.tar', '.gz', '.7z', '.rar', '.cab'].includes(ext)) {
+      category = 'Archive / ISO';
+    } else if (['.exe', '.msi', '.apk', '.dll', '.nvph'].includes(ext)) {
+      category = 'Installer / Binary';
+    } else if (['.parquet', '.csv', '.json', '.sql', '.db'].includes(ext)) {
+      category = 'Database / AI Data';
+    } else if (['.ts', '.tsx', '.rs', '.py', '.js', '.asar'].includes(ext)) {
+      category = 'Dev Artifact / Code';
+    }
 
     return {
       id: `f_real_${idx}`,
@@ -927,7 +1383,8 @@ async function scanLargeFiles(driveLetter = 'C:', minSizeMB = 25, depth = 4) {
       sizeMB: f.SizeMB,
       lastModified: f.LastModified,
       daysInactive: 1,
-      type: 'file'
+      type: 'file',
+      isGameFile: category.includes('Game')
     };
   });
 
@@ -942,7 +1399,7 @@ async function scanLargeFiles(driveLetter = 'C:', minSizeMB = 25, depth = 4) {
     }))
   }));
 
-  return { files, directoryBreakdown, duplicates };
+  return { files, directoryBreakdown, duplicates, gameLibraries: gameScanResult };
 }
 
 // 11. Get Real Startup Apps
@@ -1911,5 +2368,7 @@ module.exports = {
   syncDuplicateGroups,
   deleteFileItem,
   moveFileItem,
-  inspectFiles
+  inspectFiles,
+  getDetectedGameRoots,
+  scanGameLibraries
 };

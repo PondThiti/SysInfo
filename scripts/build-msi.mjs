@@ -111,7 +111,7 @@ execSync(
 // 5. WiX Light
 console.log('\n5. Linking MSI package with light.exe...');
 execSync(
-  '.\\tools\\wix\\light.exe -ext WixUIExtension -sval -out "release\\SystemStoragePortInspector_Setup.msi" "wix\\Product.wixobj" "wix\\AppFiles.wixobj"',
+  '.\\tools\\wix\\light.exe -ext WixUIExtension -sval -out "release\\SysInfo_Setup.msi" "wix\\Product.wixobj" "wix\\AppFiles.wixobj"',
   { stdio: 'inherit' }
 );
 
@@ -122,14 +122,18 @@ if (!fs.existsSync(targetDir)) {
 }
 
 fs.copyFileSync(
-  'release/SystemStoragePortInspector_Setup.msi',
-  path.join(targetDir, 'SystemStoragePortInspector_Setup.msi')
+  'release/SysInfo_Setup.msi',
+  path.join(targetDir, 'SysInfo_Setup.msi')
 );
 fs.copyFileSync(
-  'release/SystemStoragePortInspector_Setup.msi',
-  'SystemStoragePortInspector_Setup.msi'
+  'release/SysInfo_Setup.msi',
+  path.join(targetDir, 'SysInfo-Setup-0.1.1.msi')
+);
+fs.copyFileSync(
+  'release/SysInfo_Setup.msi',
+  'SysInfo_Setup.msi'
 );
 
-const stats = fs.statSync(path.join(targetDir, 'SystemStoragePortInspector_Setup.msi'));
+const stats = fs.statSync(path.join(targetDir, 'SysInfo_Setup.msi'));
 console.log(`\nSUCCESS: MSI created and exported to:`);
-console.log(`  -> ${path.join(targetDir, 'SystemStoragePortInspector_Setup.msi')} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+console.log(`  -> ${path.join(targetDir, 'SysInfo_Setup.msi')} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);

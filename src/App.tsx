@@ -43,7 +43,8 @@ import {
   Flame,
   FolderInput,
   FileSearch,
-  CheckSquare
+  CheckSquare,
+  Gamepad2
 } from 'lucide-react';
 
 // Format size helper (MB to MB/GB)
@@ -72,8 +73,11 @@ interface IpcLog {
 export default function App() {
   // Navigation tabs: 'dashboard' | 'storage' | 'cleaner' | 'ports' | 'settings'
   const [activeTab, setActiveTab] = useState<'dashboard' | 'storage' | 'cleaner' | 'ports' | 'settings'>('dashboard');
-  const [storageSubTab, setStorageSubTab] = useState<'heavy' | 'duplicates'>('heavy');
+  const [storageSubTab, setStorageSubTab] = useState<'heavy' | 'duplicates' | 'games'>('heavy');
   const [portSubTab, setPortSubTab] = useState<'ports' | 'services' | 'background' | 'conflicts' | 'blockers' | 'startup'>('ports');
+  const [gameLibrariesData, setGameLibrariesData] = useState<any>(null);
+  const [isScanningGames, setIsScanningGames] = useState<boolean>(false);
+  const [selectedStorageCategory, setSelectedStorageCategory] = useState<string>('all');
 
   // Real data states (NO mock data!)
   const [systemDrives, setSystemDrives] = useState<any[]>([]);
@@ -333,14 +337,38 @@ export default function App() {
         setLargeFiles(res.files || []);
         setDirectoryBreakdown(res.directoryBreakdown || []);
         setDuplicateGroups(res.duplicates || []);
+        if (res.gameLibraries) {
+          setGameLibrariesData(res.gameLibraries);
+        }
         const duration = Math.round(performance.now() - start);
-        logIpc('scan_large_files', `สแกนสำเร็จ: พบ ${res.files?.length || 0} ไฟล์ใหญ่ และ ${res.directoryBreakdown?.length || 0} โฟลเดอร์จริง`, duration);
-        showToast('สแกนไดรฟ์สำเร็จ', `พบ ${res.files?.length || 0} ไฟล์ขนาดใหญ่บนระบบ`, 'success');
+        logIpc('scan_large_files', `สแกนสำเร็จ: พบ ${res.files?.length || 0} ไฟล์ใหญ่ และ ${res.directoryBreakdown?.length || 0} โฟลเดอร์จริง (รวมไฟล์เกม)`, duration);
+        showToast('สแกนไดรฟ์สำเร็จ', `พบ ${res.files?.length || 0} ไฟล์ขนาดใหญ่บนระบบ (รวมไฟล์เกมขนาดใหญ่)`, 'success');
       }
     } catch (err: any) {
       showToast('การสแกนเกิดข้อผิดพลาด', err?.message || 'ไม่สามารถสแกนไดรฟ์ได้', 'error');
     } finally {
       setIsScanningStorage(false);
+    }
+  };
+
+  // Dedicated Game Libraries Scan Handler (เข้าถึงและวิเคราะห์ไฟล์เกมทั้งหมด)
+  const handleScanGames = async () => {
+    setIsScanningGames(true);
+    const start = performance.now();
+    logIpc('scan_game_libraries', 'เริ่มสแกนคลังเกม (Steam, Riot Games, Epic Games, Roblox, Gryphline)...');
+    try {
+      const res = await (window as any).electronAPI?.scanGameLibraries?.();
+      if (res) {
+        setGameLibrariesData(res);
+        const duration = Math.round(performance.now() - start);
+        logIpc('scan_game_libraries', `พบเกม ${res.gameCount} เกม (ขนาดรวม ${res.totalGamesSizeGB} GB)`, duration);
+        showToast('สแกนคลังเกมสำเร็จ', `พบเกมในเครื่อง ${res.gameCount} เกม (ใช้พื้นที่รวม ${res.totalGamesSizeGB} GB)`, 'success');
+        setStorageSubTab('games');
+      }
+    } catch (err: any) {
+      showToast('สแกนเกมผิดพลาด', err?.message || 'ไม่สามารถสแกนคลังเกมได้', 'error');
+    } finally {
+      setIsScanningGames(false);
     }
   };
 
@@ -1133,6 +1161,15 @@ export default function App() {
         if (selectedTreemapBlock && !f.path.toLowerCase().startsWith(selectedTreemapBlock.path.toLowerCase())) {
           return false;
         }
+        if (selectedStorageCategory !== 'all') {
+          const cat = f.category || '';
+          if (selectedStorageCategory === 'game' && !cat.includes('Game')) return false;
+          if (selectedStorageCategory === 'media' && !cat.includes('Media')) return false;
+          if (selectedStorageCategory === 'archive' && !cat.includes('Archive')) return false;
+          if (selectedStorageCategory === 'binary' && !cat.includes('Binary') && !cat.includes('Installer')) return false;
+          if (selectedStorageCategory === 'dev' && !cat.includes('Dev') && !cat.includes('Database')) return false;
+          if (selectedStorageCategory === 'other' && (cat.includes('Game') || cat.includes('Media') || cat.includes('Archive') || cat.includes('Binary') || cat.includes('Installer') || cat.includes('Dev') || cat.includes('Database'))) return false;
+        }
         if (storageSearch.trim()) {
           const q = storageSearch.toLowerCase();
           return f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q) || f.category.toLowerCase().includes(q);
@@ -1140,7 +1177,7 @@ export default function App() {
         return true;
       })
       .sort((a, b) => (storageSortAsc ? a.sizeMB - b.sizeMB : b.sizeMB - a.sizeMB));
-  }, [largeFiles, selectedDrive, selectedTreemapBlock, storageSearch, storageSortAsc]);
+  }, [largeFiles, selectedDrive, selectedTreemapBlock, selectedStorageCategory, storageSearch, storageSortAsc]);
 
   // Computed selected heavy files for batch operations
   const selectedHeavyFiles = useMemo(() => {
@@ -1313,11 +1350,11 @@ export default function App() {
           <div className="flex items-center gap-2">
             <span className="font-bold tracking-tight text-sm text-white">SysInfo</span>
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-medium">
-              v0.1.1 • System Storage & Port Inspector
+              v0.1.1 • SysInfo
             </span>
           </div>
           <span className="hidden md:inline-block text-xs text-slate-500 pl-2 border-l border-slate-800">
-            Storage Analyzer, Smart Junk Cleaner & Process/Port Inspector
+            Storage Analyzer, Smart Junk Cleaner, Game Libraries &amp; Port Inspector
           </span>
         </div>
 
@@ -2077,6 +2114,17 @@ export default function App() {
                     <span>{isInspectingFiles ? 'กำลังตรวจสอบ...' : '📁 เลือกไฟล์เพื่อตรวจสอบ'}</span>
                   </button>
 
+                  {/* Dedicated Game Files & Libraries Access Button (ให้เข้าถึงพวกไฟล์เกมด้วย) */}
+                  <button
+                    onClick={handleScanGames}
+                    disabled={isScanningGames}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-fuchsia-600/20 hover:bg-fuchsia-600/40 text-fuchsia-200 border border-fuchsia-500/30 text-xs font-semibold shadow transition"
+                    title="เข้าถึงและวิเคราะห์คลังเกมทั้งหมดในเครื่อง (Steam, Riot Games, Epic Games, Roblox, Gryphline)"
+                  >
+                    <Gamepad2 className={`w-3.5 h-3.5 text-fuchsia-400 ${isScanningGames ? 'animate-spin' : ''}`} />
+                    <span>{isScanningGames ? 'กำลังสแกนเกม...' : '🎮 คลังไฟล์เกม (Game Files)'}</span>
+                  </button>
+
                   <button
                     onClick={() => handleTriggerStorageScan()}
                     className="flex items-center gap-2 px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-600/20 transition"
@@ -2378,10 +2426,46 @@ export default function App() {
                       {duplicateGroups.length}
                     </span>
                   </button>
+                  <button
+                    onClick={() => {
+                      setStorageSubTab('games');
+                      if (!gameLibrariesData && !isScanningGames) {
+                        handleScanGames();
+                      }
+                    }}
+                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
+                      storageSubTab === 'games'
+                        ? 'bg-fuchsia-600 text-white shadow-md shadow-fuchsia-600/20'
+                        : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    <Gamepad2 className="w-3.5 h-3.5" />
+                    <span>คลังเกมในเครื่อง (Game Libraries)</span>
+                    {gameLibrariesData && (
+                      <span className="px-1.5 py-0.2 rounded-full bg-fuchsia-950 text-fuchsia-300 text-[10px] font-bold border border-fuchsia-500/30">
+                        {gameLibrariesData.gameCount} เกม
+                      </span>
+                    )}
+                  </button>
                 </div>
 
                 {storageSubTab === 'heavy' && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <select
+                      value={selectedStorageCategory}
+                      onChange={(e) => setSelectedStorageCategory(e.target.value)}
+                      className="px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer"
+                      title="กรองตามประเภทไฟล์"
+                    >
+                      <option value="all">📁 ทุกหมวดหมู่ ({largeFiles.length})</option>
+                      <option value="game">🎮 ไฟล์เกม ({largeFiles.filter(f => f.category?.includes('Game')).length})</option>
+                      <option value="media">🎥 วิดีโอ / สื่อ ({largeFiles.filter(f => f.category?.includes('Media')).length})</option>
+                      <option value="archive">📦 บีบอัด / ISO ({largeFiles.filter(f => f.category?.includes('Archive')).length})</option>
+                      <option value="binary">💾 ไบนารี / ติดตั้ง ({largeFiles.filter(f => f.category?.includes('Binary') || f.category?.includes('Installer')).length})</option>
+                      <option value="dev">💻 โค้ด / ข้อมูล ({largeFiles.filter(f => f.category?.includes('Dev') || f.category?.includes('Database')).length})</option>
+                      <option value="other">📄 เอกสารและอื่นๆ</option>
+                    </select>
+
                     <div className="relative">
                       <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
@@ -2389,7 +2473,7 @@ export default function App() {
                         value={storageSearch}
                         onChange={(e) => setStorageSearch(e.target.value)}
                         placeholder="ค้นหาชื่อไฟล์ หรือ นามสกุล..."
-                        className="pl-9 pr-3 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 w-48 sm:w-60"
+                        className="pl-9 pr-3 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 w-44 sm:w-56"
                       />
                     </div>
                     <button
@@ -2527,9 +2611,16 @@ export default function App() {
                                     </div>
                                   </td>
                                   <td className="py-3 px-4">
-                                    <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[11px]">
-                                      {file.category}
-                                    </span>
+                                    {file.category?.includes('Game') ? (
+                                      <span className="px-2 py-0.5 rounded-full bg-fuchsia-950/70 text-fuchsia-300 border border-fuchsia-500/30 text-[11px] font-semibold inline-flex items-center gap-1">
+                                        <Gamepad2 className="w-3 h-3 text-fuchsia-400" />
+                                        <span>{file.category}</span>
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[11px]">
+                                        {file.category}
+                                      </span>
+                                    )}
                                   </td>
                                   <td className="py-3 px-4 font-mono font-bold text-indigo-400">{file.drive}</td>
                                   <td className="py-3 px-4 text-right font-mono font-bold text-amber-400 text-sm">
@@ -2693,6 +2784,246 @@ export default function App() {
                         </div>
                       </div>
                     ))
+                  )}
+                </div>
+              )}
+
+              {/* Sub-tab 3: Game Libraries (เข้าถึงพวกไฟล์เกมและคลังเกม) */}
+              {storageSubTab === 'games' && (
+                <div className="space-y-4">
+                  {/* Summary & Overview Banner */}
+                  <div className="p-5 rounded-2xl bg-gradient-to-r from-fuchsia-950/40 via-purple-950/30 to-slate-900 border border-fuchsia-500/40 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-fuchsia-600 to-pink-600 flex items-center justify-center text-white shadow-lg shadow-fuchsia-600/30">
+                        <Gamepad2 className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-base font-bold text-white">คลังเกมในเครื่อง (Detected Game Libraries)</h2>
+                          <span className="px-2 py-0.5 rounded-full bg-fuchsia-500/20 text-fuchsia-300 text-[11px] font-bold border border-fuchsia-500/30">
+                            {gameLibrariesData?.gameCount || 0} เกม
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          ตรวจจับเกมจริงจาก Steam, Riot Games (VALORANT), GRYPHLINK (Arknights Endfield), Roblox และ Epic Games
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="bg-slate-900/80 px-4 py-2 rounded-xl border border-slate-800 text-right">
+                        <div className="text-[10px] text-slate-400 uppercase font-semibold">พื้นที่ติดตั้งเกมรวม</div>
+                        <div className="text-lg font-bold font-mono text-fuchsia-400">
+                          {gameLibrariesData?.totalGamesSizeGB || 0} GB
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleScanGames}
+                        disabled={isScanningGames}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-semibold shadow-lg shadow-fuchsia-600/25 transition shrink-0"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isScanningGames ? 'animate-spin' : ''}`} />
+                        <span>{isScanningGames ? 'กำลังสแกน...' : 'รีเฟรชคลังเกม'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Games Cards Grid */}
+                  {!gameLibrariesData || !gameLibrariesData.games || gameLibrariesData.games.length === 0 ? (
+                    <div className="p-8 text-center bg-slate-900/60 rounded-2xl border border-slate-800 space-y-3">
+                      <Gamepad2 className="w-10 h-10 text-fuchsia-400 mx-auto" />
+                      <div className="text-sm font-semibold text-white">ยังไม่มีข้อมูลคลังเกม</div>
+                      <p className="text-xs text-slate-400">กดปุ่มด้านล่างเพื่อสแกนค้นหาเกมและไฟล์ขนาดใหญ่ในเครื่องคอมพิวเตอร์ของคุณ</p>
+                      <button
+                        onClick={handleScanGames}
+                        disabled={isScanningGames}
+                        className="px-4 py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-semibold shadow-md transition"
+                      >
+                        {isScanningGames ? 'กำลังสแกน...' : 'เริ่มสแกนคลังเกมทันที'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {gameLibrariesData.games.map((game: any) => {
+                        const launcherColor =
+                          game.launcher === 'Steam'
+                            ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                            : game.launcher === 'Riot Games'
+                            ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                            : game.launcher === 'Gryphline'
+                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                            : game.launcher === 'Roblox'
+                            ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
+                            : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+
+                        return (
+                          <div
+                            key={game.id}
+                            className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-fuchsia-500/40 transition space-y-3 shadow-lg flex flex-col justify-between"
+                          >
+                            <div className="space-y-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <h3 className="font-bold text-white text-sm" title={game.name}>
+                                    {game.name}
+                                  </h3>
+                                  <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-semibold border ${launcherColor}`}>
+                                    {game.launcher}
+                                  </span>
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-mono font-bold text-base text-amber-400">
+                                    {game.sizeGB} GB
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 font-mono">
+                                    ({game.fileCount?.toLocaleString()} ไฟล์)
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="text-[11px] text-slate-400 font-mono bg-slate-950/70 p-2 rounded-lg border border-slate-800/80 truncate" title={game.installPath}>
+                                📁 {game.installPath}
+                              </div>
+
+                              {game.largestFile && game.largestFile.name && (
+                                <div className="text-[11px] bg-fuchsia-950/30 border border-fuchsia-500/20 p-2 rounded-lg space-y-0.5">
+                                  <div className="text-[10px] text-fuchsia-300 font-semibold flex items-center justify-between">
+                                    <span>ไฟล์ใหญ่สุดในเกม:</span>
+                                    <span className="font-mono font-bold text-amber-300">
+                                      {formatSize(game.largestFile.sizeMB)}
+                                    </span>
+                                  </div>
+                                  <div className="text-slate-300 font-mono truncate text-[10px]" title={game.largestFile.path}>
+                                    {game.largestFile.name}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Game Action Buttons */}
+                            <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-1.5">
+                              <button
+                                onClick={() => handleOpenFolder(game.installPath)}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition"
+                                title="เปิดโฟลเดอร์เกมใน Windows Explorer"
+                              >
+                                <FolderOpen className="w-3.5 h-3.5 text-slate-400" />
+                                <span>เปิดโฟลเดอร์</span>
+                              </button>
+                              <button
+                                onClick={() => handleCopy(game.installPath, game.id)}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                                title="คัดลอกตำแหน่งพาธเกม"
+                              >
+                                {copiedId === game.id ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setStorageSearch(game.name);
+                                  setSelectedStorageCategory('all');
+                                  setStorageSubTab('heavy');
+                                }}
+                                className="flex items-center gap-1 py-1.5 px-2.5 rounded-lg bg-fuchsia-600/20 hover:bg-fuchsia-600/40 text-fuchsia-200 border border-fuchsia-500/30 text-xs font-semibold transition"
+                                title="กรองดูเฉพาะไฟล์ใหญ่ของเกมนี้ในตาราง"
+                              >
+                                <Search className="w-3.5 h-3.5" />
+                                <span>ดูไฟล์เกมนี้</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Top Game Files Table */}
+                  {gameLibrariesData?.topGameFiles && gameLibrariesData.topGameFiles.length > 0 && (
+                    <div className="mt-6 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Flame className="w-4 h-4 text-fuchsia-400" />
+                          <h3 className="font-bold text-white text-sm">
+                            ไฟล์เกมขนาดยักษ์ที่กินพื้นที่มากที่สุด (Top Heavy Game Assets)
+                          </h3>
+                        </div>
+                        <span className="text-xs text-slate-400">
+                          {gameLibrariesData.topGameFiles.length} รายการ
+                        </span>
+                      </div>
+
+                      <div className="rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="border-b border-slate-800 bg-slate-950/60 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                                <th className="py-3 px-4">ชื่อไฟล์เกม (.pak / .starpak / .ucas)</th>
+                                <th className="py-3 px-4">เกม</th>
+                                <th className="py-3 px-4">ไดรฟ์</th>
+                                <th className="py-3 px-4 text-right">ขนาดไฟล์</th>
+                                <th className="py-3 px-4 text-center">จัดการ</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/60 text-xs">
+                              {gameLibrariesData.topGameFiles.slice(0, 20).map((gf: any, idx: number) => (
+                                <tr key={`top_gf_${idx}`} className="hover:bg-slate-800/30 transition">
+                                  <td className="py-3 px-4">
+                                    <div className="font-semibold text-slate-100 flex items-center gap-1.5 truncate max-w-md" title={gf.name}>
+                                      <Gamepad2 className="w-3.5 h-3.5 text-fuchsia-400 shrink-0" />
+                                      <span className="truncate">{gf.name}</span>
+                                    </div>
+                                    <div className="text-[11px] text-slate-400 font-mono truncate max-w-lg" title={gf.path}>
+                                      {gf.path}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <span className="px-2 py-0.5 rounded-full bg-fuchsia-950 text-fuchsia-300 border border-fuchsia-500/20 text-[11px] font-semibold">
+                                      {gf.game}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 font-mono font-bold text-indigo-400">{gf.drive || 'C:'}</td>
+                                  <td className="py-3 px-4 text-right font-mono font-bold text-amber-400 text-sm">
+                                    {formatSize(gf.sizeMB)}
+                                  </td>
+                                  <td className="py-3 px-4 text-center">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <button
+                                        onClick={() => handleInspectSingleFile(gf.path)}
+                                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-violet-600/30 hover:text-violet-300 text-slate-300 transition"
+                                        title="ตรวจสอบไฟล์นี้เชิงลึก"
+                                      >
+                                        <Search className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleOpenFolder(gf.path)}
+                                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                                        title="เปิดใน Explorer"
+                                      >
+                                        <FolderOpen className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleCopy(gf.path, `gf_${idx}`)}
+                                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                                        title="คัดลอกตำแหน่งไฟล์"
+                                      >
+                                        {copiedId === `gf_${idx}` ? (
+                                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                        ) : (
+                                          <Copy className="w-3.5 h-3.5" />
+                                        )}
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
@@ -4656,13 +4987,13 @@ export default function App() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-white">ยืนยันการถอนการติดตั้ง</h3>
-                <p className="text-xs text-rose-300/80">System Storage &amp; Port Inspector</p>
+                <p className="text-xs text-rose-300/80">SysInfo v0.1.1</p>
               </div>
             </div>
 
             <div className="text-xs text-slate-300 space-y-2 bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 leading-relaxed">
               <p>
-                คุณต้องการถอนการติดตั้งโปรแกรม <b>System Storage &amp; Port Inspector</b> ออกจากเครื่องคอมพิวเตอร์ใช่หรือไม่?
+                คุณต้องการถอนการติดตั้งโปรแกรม <b>SysInfo (v0.1.1)</b> ออกจากเครื่องคอมพิวเตอร์ใช่หรือไม่?
               </p>
               <div className="text-[11px] text-emerald-400 bg-emerald-950/30 p-2.5 rounded-lg border border-emerald-500/20 space-y-1">
                 <p className="font-semibold flex items-center gap-1.5">

@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   uninstallSelf: () => ipcRenderer.invoke('uninstall-self'),
   getAllBackgroundProcesses: () => ipcRenderer.invoke('get-all-background-processes'),
   detectProgramConflicts: () => ipcRenderer.invoke('detect-program-conflicts'),
+  scanGameLibraries: () => ipcRenderer.invoke('scan-game-libraries'),
   resolveConflict: (conflictId, pids) => ipcRenderer.invoke('resolve-conflict', conflictId, pids),
   chooseFolder: () => ipcRenderer.invoke('choose-folder'),
   chooseFiles: () => ipcRenderer.invoke('choose-files'),

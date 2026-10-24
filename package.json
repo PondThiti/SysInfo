@@ -10,11 +10,11 @@
     "start": "electron .",
     "msi": "node scripts/build-msi.mjs",
     "pack": "npm run build && electron-builder --dir",
-    "dist:win": "npm run build && electron-builder --win nsis zip",
+    "dist:win": "node scripts/build-all.mjs",
     "dist:mac": "npm run build && electron-builder --mac zip",
     "dist:linux": "npm run build && electron-builder --linux tar.gz AppImage",
     "dist:all": "npm run build && electron-builder -mwl",
-    "dist": "npm run dist:win"
+    "dist": "node scripts/build-all.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.16.0",

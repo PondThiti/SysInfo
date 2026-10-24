@@ -148,3 +148,37 @@ Update (2026-10-24): Version 0.1.1 - App Renamed to SysInfo, File Inspector & Po
    - `package-lock.json`: version 0.1.1
    - `src/App.tsx`: v0.1.1 • SysInfo
    - `wix/Product.wxs`: version 0.1.1.0, target sysinfo.exe
+
+================================================================================
+Update (2026-10-24): Game Files Access & Installer Fix (v0.1.1 & sysinfo.exe)
+================================================================================
+1. ระบบเข้าถึงและวิเคราะห์ไฟล์เกมจริงในเครื่อง (Game Files & Libraries Integration):
+   - ตรวจจับคลังเกมอัตโนมัติจากทุกแพลตฟอร์ม:
+     * Steam (ตรวจจับ path จาก Registry และ libraryfolders.vdf รองรับทุกคลังเกมและทุกไดรฟ์) เช่น Apex Legends, Warframe, Core Keeper, Barotrauma
+     * Riot Games (ตรวจจับ C:\Riot Games, D:\Riot Games ฯลฯ) เช่น VALORANT, Riot Client
+     * GRYPHLINK (ตรวจจับโฟลเดอร์เกม) เช่น Arknights Endfield
+     * Roblox (ตรวจจับ %LOCALAPPDATA%\Roblox\Versions และ UniversalApp)
+     * Epic Games (ตรวจจับโฟลเดอร์ติดตั้งเกม เช่น TerraScape, Among Us)
+     * โฟลเดอร์เกมทั่วไป *:\Games, *:\XboxGames, *:\GOG Games
+   - เพิ่มหมวดหมู่ 🎮 Game / Game Asset สำหรับไฟล์เกมขนาดใหญ่:
+     * รองรับนามสกุลไฟล์เกมกว่า 35 ชนิด: .pak, .ucas, .utoc, .starpak, .vpk, .bundle, .assets, .unity3d, .res, .wad, .rpf, .bik, .bk2, .forge, .bsp, .ba2, .bsa, .dat, .obb, .cas, .cpk, .wem, .bnk, .umap, .uasset, .scs, .xpak, .chk ฯลฯ
+     * แสดงไฟล์เกมขนาดยักษ์ เช่น pc_all.opt.starpak (30 GB), pakchunk10-WindowsClient.ucas (19.3 GB) ในตารางไฟล์ขนาดใหญ่
+   - เพิ่มแท็บย่อยใหม่ "🎮 คลังเกมในเครื่อง (Game Libraries)" ในหน้า Storage Analyzer:
+     * แสดงการ์ดข้อมูลของแต่ละเกม พร้อมโลโก้/สีประจำค่าย (Steam, Riot, Gryphline, Roblox, Epic Games)
+     * แสดงขนาดพื้นที่จริงที่แต่ละเกมใช้งาน, จำนวนไฟล์ทั้งหมด, และไฟล์ที่ใหญ่ที่สุดในเกม
+     * ปุ่มด่วน 1-Click: "📂 เปิดโฟลเดอร์", "📋 คัดลอกพาธ", "🔍 ดูกรองไฟล์เกมนี้ในตาราง"
+     * ตาราง "ไฟล์เกมขนาดยักษ์ (Top Heavy Game Assets)" พร้อมปุ่มตรวจสอบเชิงลึกและเปิดใน Explorer
+   - เพิ่มตัวกรองหมวดหมู่ "🎮 ไฟล์เกม (Game Files)" ในหน้า Storage Analyzer ให้เลือกดูเฉพาะไฟล์เกมได้ทันที
+   - เพิ่มหมวดหมู่แคชเกมใน Junk Cleaner:
+     * หมวดหมู่ 5: 🎮 Game Caches & Shader Cache (แคชเกมและตัวเร่งกราฟิก 3D)
+     * รองรับ DirectX Shader Cache (D3DSCache), NVIDIA Shader Cache (DXCache/GLCache), AMD Shader Cache, Steam HTML/Download Cache, Riot/VALORANT Crash Reports & Engine Logs, Roblox Logs, GRYPHLINK CrashSight Logs
+
+2. แก้ไขปัญหาตัวติดตั้งและเวอร์ชันไม่อัปเดต (Fix Version & sysinfo.exe Packaging):
+   - แก้ไขการตั้งค่าบิลด์และสร้างสคริปต์ scripts/build-all.mjs สำหรับคอมไพล์ชุดติดตั้งครบทุกรูปแบบ:
+     * บิลด์ Windows NSIS Installer (SysInfo_Setup.exe และ SysInfo-Setup-0.1.1.exe)
+     * บิลด์ Windows MSI Installer (SysInfo_Setup.msi และ SysInfo-Setup-0.1.1.msi)
+     * บิลด์ Windows Portable Archive (SysInfo_Portable.zip และ SysInfo-0.1.1-win.zip)
+     * บิลด์โฟลเดอร์ unpack (release\win-unpacked\sysinfo.exe)
+   - ลบไฟล์เวอร์ชันเก่า (v0.0.3) ออกจาก C:\Users\zeroy\Desktop\MyProject\Apps\PC-App\ อย่างหมดจด
+   - ส่งออกไฟล์ตัวติดตั้ง v0.1.1 ตัวใหม่ทั้งหมดไปยัง C:\Users\zeroy\Desktop\MyProject\Apps\PC-App\
+   - ตัวโปรแกรมเมื่อติดตั้งหรือรันจะเป็น sysinfo.exe และแสดงเวอร์ชัน v0.1.1 • SysInfo ครบทุกส่วนของโปรแกรม

@@ -169,6 +169,10 @@ ipcMain.handle('detect-program-conflicts', async () => {
   return await systemService.detectProgramConflicts();
 });
 
+ipcMain.handle('scan-game-libraries', async () => {
+  return await systemService.scanGameLibraries();
+});
+
 ipcMain.handle('resolve-conflict', async (_event, conflictId, pids) => {
   return await systemService.resolveConflict(conflictId, pids);
 });
