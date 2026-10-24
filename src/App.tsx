@@ -36,7 +36,11 @@ import {
   Play,
   Sun,
   Moon,
-  Type
+  Type,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Flame
 } from 'lucide-react';
 
 // Format size helper (MB to MB/GB)
@@ -66,7 +70,7 @@ export default function App() {
   // Navigation tabs: 'dashboard' | 'storage' | 'cleaner' | 'ports' | 'settings'
   const [activeTab, setActiveTab] = useState<'dashboard' | 'storage' | 'cleaner' | 'ports' | 'settings'>('dashboard');
   const [storageSubTab, setStorageSubTab] = useState<'heavy' | 'duplicates'>('heavy');
-  const [portSubTab, setPortSubTab] = useState<'ports' | 'services' | 'blockers' | 'startup'>('ports');
+  const [portSubTab, setPortSubTab] = useState<'ports' | 'services' | 'background' | 'conflicts' | 'blockers' | 'startup'>('ports');
 
   // Real data states (NO mock data!)
   const [systemDrives, setSystemDrives] = useState<any[]>([]);
@@ -77,6 +81,36 @@ export default function App() {
   const [ports, setPorts] = useState<any[]>([]);
   const [windowsServices, setWindowsServices] = useState<any[]>([]);
   const [startupApps, setStartupApps] = useState<any[]>([]);
+
+  // Background processes state (ย่อดรอปดาวน์)
+  const [backgroundProcs, setBackgroundProcs] = useState<any[]>([]);
+  const [isScanningBackground, setIsScanningBackground] = useState(false);
+  const [backgroundCategoryFilter, setBackgroundCategoryFilter] = useState<string>('all');
+  const [backgroundSearch, setBackgroundSearch] = useState('');
+  const [backgroundSortBy, setBackgroundSortBy] = useState<'ram' | 'name' | 'pid'>('ram');
+  const [expandedBgGroups, setExpandedBgGroups] = useState<{ [key: string]: boolean }>({
+    user_app: true,
+    service: false,
+    windows_app: false,
+    system: false,
+    other: false
+  });
+
+  // Conflicts & Collision Detector state (เช็คโปรแกรมขัดการทำงานกัน)
+  const [conflicts, setConflicts] = useState<any[]>([]);
+  const [isScanningConflicts, setIsScanningConflicts] = useState(false);
+  const [conflictFilter, setConflictFilter] = useState<'all' | 'critical' | 'warning' | 'info'>('all');
+  const [resolvingConflictId, setResolvingConflictId] = useState<string | null>(null);
+
+  // Junk clean results & in-use/locked warning state
+  const [junkCleanResult, setJunkCleanResult] = useState<{
+    cleanedCount: number;
+    failedCount: number;
+    reclaimedMB: number;
+    lockedFiles: any[];
+    runningBlockers: any[];
+    summary: string;
+  } | null>(null);
 
   // Uninstall Blocker & Hidden Tasks state
   const [blockerSearch, setBlockerSearch] = useState('');
@@ -122,6 +156,18 @@ export default function App() {
   const [minHeavyFileSizeMB, setMinHeavyFileSizeMB] = useState(25);
   const [scanDepth, setScanDepth] = useState(4);
   const [autoResolveServices, setAutoResolveServices] = useState(true);
+  const [showUninstallModal, setShowUninstallModal] = useState(false);
+  const [isUninstalling, setIsUninstalling] = useState(false);
+
+  const handleDirectUninstall = async () => {
+    setIsUninstalling(true);
+    try {
+      await (window as any).electronAPI?.uninstallSelf?.();
+    } catch (e) {
+      console.error(e);
+      setIsUninstalling(false);
+    }
+  };
 
   // Sync Theme & Font Size with HTML document root & LocalStorage
   useEffect(() => {
@@ -230,6 +276,10 @@ export default function App() {
 
     // H. Initial Scan of Background Blockers
     handleScanBlockers('');
+
+    // I. Initial Scan of Background Processes & Conflicts
+    handleScanBackground();
+    handleScanConflicts();
 
     return () => clearInterval(timer);
   }, [telemetryInterval]);
@@ -341,6 +391,7 @@ export default function App() {
     if (res?.success) {
       showToast('ปิด Process สำเร็จ', `ยุติการทำงานของ ${processName} (PID ${pid}) เรียบร้อยแล้ว`, 'success');
       setPorts((prev) => prev.filter((p) => p.pid !== pid));
+      setBackgroundProcs((prev) => prev.filter((p) => p.pid !== pid));
       setBlockerResults((prev) => ({
         ...prev,
         blockers: prev.blockers.filter((b) => b.pid !== pid)
@@ -377,7 +428,7 @@ export default function App() {
     );
   };
 
-  // Clean junk items
+  // Clean junk items with deep force cleaning & real-time auto-update across entire app
   const handleCleanJunk = async () => {
     const selectedItems: any[] = [];
     junkCategories.forEach((cat) => {
@@ -392,23 +443,123 @@ export default function App() {
     }
 
     setIsCleaningJunk(true);
+    setJunkCleanResult(null);
     try {
       const res = await (window as any).electronAPI?.cleanJunkItems?.(selectedItems, safeRecycleBin);
       if (res?.success) {
-        setTotalCleanedSessionMB((prev) => prev + res.reclaimedMB);
-        showToast(
-          'ทำความสะอาดสำเร็จ',
-          `ล้างไฟล์ไปแล้ว ${res.cleanedCount} รายการ ได้พื้นที่คืน ${formatSize(res.reclaimedMB)}`,
-          'success'
-        );
-        // Refresh junk list
+        setJunkCleanResult(res);
+        setTotalCleanedSessionMB((prev) => prev + (res.reclaimedMB || 0));
+
+        if (res.failedCount > 0) {
+          showToast(
+            'ล้างไฟล์แล้ว (มีบางไฟล์ติดล็อก)',
+            `ลบสำเร็จ ${res.cleanedCount} รายการ (${formatSize(res.reclaimedMB)}) ติดล็อก ${res.failedCount} รายการ`,
+            'warning'
+          );
+        } else {
+          showToast(
+            'ทำความสะอาดเสร็จสมบูรณ์',
+            `ล้างไฟล์ไปแล้ว ${res.cleanedCount} รายการ ได้พื้นที่คืน ${formatSize(res.reclaimedMB)}`,
+            'success'
+          );
+        }
+
+        // ==========================================
+        // AUTO-UPDATE DATA IN REAL TIME ACROSS APP:
+        // ==========================================
+        // 1. Refresh Junk Categories list immediately
         const updatedJunk = await (window as any).electronAPI?.scanRealJunk?.();
         if (updatedJunk) setJunkCategories(updatedJunk);
+
+        // 2. Refresh System Drives immediately (so Dashboard & Storage tab show updated free space!)
+        const updatedDrives = await (window as any).electronAPI?.getSystemDrives?.();
+        if (updatedDrives) setSystemDrives(updatedDrives);
+
+        // 3. Refresh System Telemetry
+        const updatedTele = (window as any).electronAPI?.getSystemTelemetry?.();
+        if (updatedTele) {
+          setCpuUsage(updatedTele.cpuPercent);
+          setRamUsageGB(updatedTele.usedMemGB);
+          setTotalRamGB(updatedTele.totalMemGB);
+        }
       }
     } catch (err: any) {
       showToast('เกิดข้อผิดพลาดในการลบ', err?.message || 'ไม่สามารถลบไฟล์บางรายการได้', 'error');
     } finally {
       setIsCleaningJunk(false);
+    }
+  };
+
+  // Kill blockers and retry clean
+  const handleKillBlockersAndRetryClean = async () => {
+    if (!junkCleanResult || !junkCleanResult.runningBlockers?.length) return;
+    setIsCleaningJunk(true);
+    try {
+      for (const b of junkCleanResult.runningBlockers) {
+        await (window as any).electronAPI?.killProcess?.(b.pid);
+      }
+      showToast('ปิดโปรแกรมที่ล็อกแล้ว', 'กำลังเริ่มล้างไฟล์ใหม่อีกครั้ง...', 'info');
+      await handleCleanJunk();
+    } catch (e: any) {
+      showToast('เกิดข้อผิดพลาด', e?.message || 'ไม่สามารถปิดโปรแกรมบางตัวได้', 'error');
+      setIsCleaningJunk(false);
+    }
+  };
+
+  // Scan all background processes (ย่อดรอปดาวน์)
+  const handleScanBackground = async () => {
+    setIsScanningBackground(true);
+    const start = performance.now();
+    logIpc('get_all_background_processes', 'ดึงข้อมูลโปรแกรมพื้นหลังทั้งหมดในระบบ...');
+    try {
+      const res = await (window as any).electronAPI?.getAllBackgroundProcesses?.();
+      if (res && Array.isArray(res)) {
+        setBackgroundProcs(res);
+        logIpc('get_all_background_processes', `พบโปรเซสพื้นหลังทั้งหมด ${res.length} รายการ`, Math.round(performance.now() - start));
+      }
+    } catch (e: any) {
+      showToast('เกิดข้อผิดพลาด', e?.message || 'ไม่สามารถดึงโปรแกรมพื้นหลังได้', 'error');
+    } finally {
+      setIsScanningBackground(false);
+    }
+  };
+
+  // Scan program conflicts (เช็คโปรแกรมขัดการทำงานกัน)
+  const handleScanConflicts = async () => {
+    setIsScanningConflicts(true);
+    const start = performance.now();
+    logIpc('detect_program_conflicts', 'สแกนหาข้อขัดแย้ง พอร์ตชนกัน และโปรเซสค้าง...');
+    try {
+      const res = await (window as any).electronAPI?.detectProgramConflicts?.();
+      if (res && Array.isArray(res)) {
+        setConflicts(res);
+        logIpc('detect_program_conflicts', `พบข้อขัดแย้งในระบบ ${res.length} รายการ`, Math.round(performance.now() - start));
+      }
+    } catch (e: any) {
+      showToast('เกิดข้อผิดพลาด', e?.message || 'ไม่สามารถสแกนข้อขัดแย้งได้', 'error');
+    } finally {
+      setIsScanningConflicts(false);
+    }
+  };
+
+  // Resolve conflict
+  const handleResolveConflict = async (conflict: any) => {
+    setResolvingConflictId(conflict.id);
+    const pids = conflict.conflictingPrograms?.map((p: any) => p.pid) || [];
+    try {
+      const res = await (window as any).electronAPI?.resolveConflict?.(conflict.id, pids);
+      if (res?.success) {
+        showToast('แก้ไขข้อขัดแย้งสำเร็จ', `ปิดโปรเซสที่เกี่ยวข้อง (${res.killedCount} ตัว) เรียบร้อย`, 'success');
+        handleScanConflicts();
+        handleScanBackground();
+        (window as any).electronAPI?.scanActivePorts?.().then((p: any) => p && setPorts(p));
+      } else {
+        showToast('ไม่สามารถแก้ไขได้', res?.error || 'เกิดข้อผิดพลาด', 'error');
+      }
+    } catch (e: any) {
+      showToast('เกิดข้อผิดพลาด', e?.message || 'ไม่สามารถปิดโปรเซสได้', 'error');
+    } finally {
+      setResolvingConflictId(null);
     }
   };
 
@@ -499,6 +650,56 @@ export default function App() {
     };
   }, [junkCategories]);
 
+  // Computed Background Processes (filtering & sorting)
+  const filteredBackgroundProcs = useMemo(() => {
+    return backgroundProcs
+      .filter((p) => {
+        if (backgroundCategoryFilter !== 'all' && p.category !== backgroundCategoryFilter) {
+          return false;
+        }
+        if (backgroundSearch.trim()) {
+          const q = backgroundSearch.toLowerCase();
+          return (
+            p.processName.toLowerCase().includes(q) ||
+            p.pid.toString().includes(q) ||
+            (p.path && p.path.toLowerCase().includes(q)) ||
+            (p.company && p.company.toLowerCase().includes(q)) ||
+            (p.description && p.description.toLowerCase().includes(q)) ||
+            (p.serviceName && p.serviceName.toLowerCase().includes(q))
+          );
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        if (backgroundSortBy === 'ram') return (b.memoryMB || 0) - (a.memoryMB || 0);
+        if (backgroundSortBy === 'name') return a.processName.localeCompare(b.processName);
+        if (backgroundSortBy === 'pid') return a.pid - b.pid;
+        return 0;
+      });
+  }, [backgroundProcs, backgroundCategoryFilter, backgroundSearch, backgroundSortBy]);
+
+  // Grouped Background Processes by Category for Accordions
+  const groupedBackgroundProcs = useMemo(() => {
+    const groups: { [key: string]: any[] } = {
+      user_app: [],
+      service: [],
+      windows_app: [],
+      system: [],
+      other: []
+    };
+    filteredBackgroundProcs.forEach((p) => {
+      const cat = p.category in groups ? p.category : 'other';
+      groups[cat].push(p);
+    });
+    return groups;
+  }, [filteredBackgroundProcs]);
+
+  // Computed Conflicts Filter
+  const filteredConflicts = useMemo(() => {
+    if (conflictFilter === 'all') return conflicts;
+    return conflicts.filter((c) => c.severity === conflictFilter);
+  }, [conflicts, conflictFilter]);
+
   return (
     <div className={`h-screen w-screen ${theme === 'light' ? 'theme-light bg-slate-50 text-slate-900' : 'theme-dark bg-slate-950 text-slate-100'} flex flex-col font-sans selection:bg-indigo-500 selection:text-white overflow-hidden select-none`}>
       {/* =====================================================================
@@ -512,7 +713,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <span className="font-bold tracking-tight text-sm text-white">SysPulse</span>
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-medium">
-              v0.0.2 • System Storage & Port Inspector
+              v0.0.3 • System Storage & Port Inspector
             </span>
           </div>
           <span className="hidden md:inline-block text-xs text-slate-500 pl-2 border-l border-slate-800">
@@ -684,7 +885,7 @@ export default function App() {
               )}
             </button>
 
-            {/* Menu 4: Ports & Services */}
+            {/* Menu 4: Ports, Services, Background & Conflicts */}
             <button
               onClick={() => {
                 setActiveTab('ports');
@@ -699,19 +900,26 @@ export default function App() {
               <div className="flex items-center gap-3">
                 <Network className="w-4 h-4 shrink-0" />
                 <div className="text-left">
-                  <div>พอร์ต & เซอร์วิส & ตัวปลดล็อก</div>
+                  <div>พอร์ต, โปรแกรมพื้นหลัง & ข้อขัดแย้ง</div>
                   <div className={`text-[11px] ${activeTab === 'ports' ? 'text-indigo-200' : 'text-slate-500'}`}>
-                    Ports, Services & Blockers
+                    Ports, Background & Conflicts
                   </div>
                 </div>
               </div>
-              <span
-                className={`text-xs px-2 py-0.5 rounded-full ${
-                  activeTab === 'ports' ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'
-                }`}
-              >
-                {ports.length}
-              </span>
+              <div className="flex items-center gap-1.5">
+                {conflicts.length > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold animate-pulse">
+                    {conflicts.length} ขัดแย้ง
+                  </span>
+                )}
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full ${
+                    activeTab === 'ports' ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  {ports.length}
+                </span>
+              </div>
             </button>
 
             {/* Menu 5: Settings */}
@@ -821,7 +1029,7 @@ export default function App() {
                     ภาพรวมสถานะระบบคอมพิวเตอร์ (System Overview)
                   </h1>
                   <p className="text-sm text-slate-400">
-                    เข้าถึงฮาร์ดแวร์จริง ไดรฟ์จริง และตรวจสอบพอร์ต/เซอร์วิสที่กำลังทำงานในเครื่อง
+                    เข้าถึงฮาร์ดแวร์จริง ไดรฟ์จริง ตรวจจับโปรแกรมพื้นหลัง และวิเคราะห์ข้อขัดแย้งในเครื่อง
                   </p>
                 </div>
                 <div className="flex items-center gap-2.5">
@@ -830,10 +1038,12 @@ export default function App() {
                       handleTriggerStorageScan();
                       (window as any).electronAPI?.scanActivePorts?.().then((p: any) => p && setPorts(p));
                       (window as any).electronAPI?.getWindowsServices?.().then((s: any) => s && setWindowsServices(s));
+                      handleScanBackground();
+                      handleScanConflicts();
                     }}
                     className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isScanningStorage ? 'animate-spin text-indigo-400' : ''}`} />
+                    <RefreshCw className={`w-3.5 h-3.5 ${isScanningStorage || isScanningConflicts ? 'animate-spin text-indigo-400' : ''}`} />
                     <span>รีเฟรชข้อมูล</span>
                   </button>
                   <button
@@ -846,8 +1056,40 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 3 Overview Quick Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Conflict Alert Banner if any conflicts exist */}
+              {conflicts.length > 0 && (
+                <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-rose-950/20">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30 shrink-0">
+                      <AlertTriangle className="w-5 h-5 animate-bounce" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>ตรวจพบโปรแกรมขัดการทำงานกัน {conflicts.length} รายการ</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/30 text-rose-200 font-semibold">
+                          ตรวจพบข้อขัดแย้ง
+                        </span>
+                      </div>
+                      <p className="text-xs text-rose-200/80 mt-0.5">
+                        พบพอร์ตชนกัน โปรเซสเปิดค้างซ้ำซ้อน หรือโปรแกรมเบื้องหลังที่แย่งทรัพยากร อาจส่งผลให้แอปอื่นทำงานผิดพลาด
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setActiveTab('ports');
+                      setPortSubTab('conflicts');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30 transition shrink-0 flex items-center gap-1.5"
+                  >
+                    <span>ตรวจสอบข้อขัดแย้ง</span>
+                    <span>→</span>
+                  </button>
+                </div>
+              )}
+
+              {/* 4 Overview Quick Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Junk Card */}
                 <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col justify-between">
                   <div className="flex items-start justify-between">
@@ -862,7 +1104,7 @@ export default function App() {
                     </div>
                   </div>
                   <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                    <span className="text-slate-400">เลือกอยู่: {formatSize(totalSelectedJunkMB)} ({selectedJunkCount} รายการ)</span>
+                    <span className="text-slate-400">เลือก: {formatSize(totalSelectedJunkMB)}</span>
                     <button
                       onClick={() => setActiveTab('cleaner')}
                       className="text-amber-400 hover:text-amber-300 font-medium"
@@ -876,7 +1118,7 @@ export default function App() {
                 <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col justify-between">
                   <div className="flex items-start justify-between">
                     <div>
-                      <span className="text-xs text-slate-400 font-medium">พอร์ตที่เปิดใช้งานจริง (Active Ports)</span>
+                      <span className="text-xs text-slate-400 font-medium">พอร์ตที่เปิดใช้งานจริง</span>
                       <div className="text-2xl font-bold text-white mt-1">{ports.length} พอร์ต</div>
                     </div>
                     <div className="p-2.5 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
@@ -885,7 +1127,7 @@ export default function App() {
                   </div>
                   <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
                     <span className="text-slate-400">
-                      มี Service ผูกอยู่: {ports.filter((p) => p.serviceName).length} รายการ
+                      Service ผูก: {ports.filter((p) => p.serviceName).length}
                     </span>
                     <button
                       onClick={() => {
@@ -899,29 +1141,58 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Uninstall Blocker Card */}
+                {/* Background Programs Card */}
                 <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col justify-between">
                   <div className="flex items-start justify-between">
                     <div>
-                      <span className="text-xs text-slate-400 font-medium">เซอร์วิสระบบ Windows ทั้งหมด</span>
-                      <div className="text-2xl font-bold text-white mt-1">{windowsServices.length} Services</div>
+                      <span className="text-xs text-slate-400 font-medium">โปรแกรมพื้นหลังทั้งหมด</span>
+                      <div className="text-2xl font-bold text-white mt-1">{backgroundProcs.length} โปรเซส</div>
                     </div>
-                    <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-400 border border-violet-500/20">
-                      <Zap className="w-5 h-5" />
+                    <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                      <Layers className="w-5 h-5" />
                     </div>
                   </div>
                   <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
                     <span className="text-slate-400">
-                      กำลังรัน: {windowsServices.filter((s) => s.state === 'Running').length} บริการ
+                      แอปผู้ใช้: {backgroundProcs.filter((p) => p.category === 'user_app').length} ตัว
                     </span>
                     <button
                       onClick={() => {
                         setActiveTab('ports');
-                        setPortSubTab('services');
+                        setPortSubTab('background');
                       }}
-                      className="text-violet-400 hover:text-violet-300 font-medium"
+                      className="text-indigo-400 hover:text-indigo-300 font-medium"
                     >
-                      เช็ค Service & Port →
+                      ย่อดรอปดาวน์ดู →
+                    </button>
+                  </div>
+                </div>
+
+                {/* Conflicts & Collisions Card */}
+                <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col justify-between">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="text-xs text-slate-400 font-medium">ข้อขัดแย้งในระบบ</span>
+                      <div className={`text-2xl font-bold mt-1 ${conflicts.length > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        {conflicts.length > 0 ? `${conflicts.length} รายการ` : 'ปกติ (0)'}
+                      </div>
+                    </div>
+                    <div className={`p-2.5 rounded-xl ${conflicts.length > 0 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
+                      {conflicts.length > 0 ? <AlertTriangle className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+                    <span className="text-slate-400">
+                      {conflicts.length > 0 ? 'ต้องตรวจสอบ' : 'ระบบราบรื่น'}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setActiveTab('ports');
+                        setPortSubTab('conflicts');
+                      }}
+                      className="text-rose-400 hover:text-rose-300 font-medium"
+                    >
+                      เช็คข้อขัดแย้ง →
                     </button>
                   </div>
                 </div>
@@ -1493,6 +1764,106 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Junk Clean Result & Locked-File Warning Banner */}
+              {junkCleanResult && (
+                <div
+                  className={`p-4 rounded-2xl border space-y-3 ${
+                    junkCleanResult.failedCount > 0
+                      ? 'bg-amber-950/40 border-amber-500/40'
+                      : 'bg-emerald-950/40 border-emerald-500/40'
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      {junkCleanResult.failedCount > 0 ? (
+                        <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                      ) : (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                      )}
+                      <div>
+                        <div className="font-bold text-sm text-white flex items-center gap-2">
+                          <span>
+                            {junkCleanResult.failedCount > 0
+                              ? `ลบสำเร็จ ${junkCleanResult.cleanedCount} รายการ (ได้พื้นที่คืน ${formatSize(junkCleanResult.reclaimedMB)}) มี ${junkCleanResult.failedCount} ไฟล์ที่ไม่สามารถลบได้`
+                              : `ล้างไฟล์ขยะเสร็จสมบูรณ์ 100% (${junkCleanResult.cleanedCount} รายการ, คืนพื้นที่ ${formatSize(junkCleanResult.reclaimedMB)})`}
+                          </span>
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                              junkCleanResult.failedCount > 0
+                                ? 'bg-amber-500/20 text-amber-300'
+                                : 'bg-emerald-500/20 text-emerald-300'
+                            }`}
+                          >
+                            {junkCleanResult.failedCount > 0 ? 'มีไฟล์ติดล็อก/ใช้งานอยู่' : 'สะอาดหมดจด'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-300 mt-1">
+                          {junkCleanResult.failedCount > 0
+                            ? 'สาเหตุ: ไฟล์เหล่านี้กำลังถูกโปรแกรมหรือเซอร์วิสในเครื่องเปิดใช้งานอยู่ (File Locked / In-Use) จึงไม่สามารถลบได้จนกว่าจะปิดโปรแกรมดังกล่าว'
+                            : 'ข้อมูลพื้นที่ไดรฟ์และขนาดไฟล์ขยะได้รับการอัปเดตอัตโนมัติแบบ Real-Time เรียบร้อยแล้ว'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {junkCleanResult.failedCount > 0 && junkCleanResult.runningBlockers && junkCleanResult.runningBlockers.length > 0 && (
+                      <button
+                        onClick={handleKillBlockersAndRetryClean}
+                        disabled={isCleaningJunk}
+                        className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 transition flex items-center justify-center gap-2 shrink-0"
+                      >
+                        <Zap className="w-4 h-4" />
+                        <span>ปิดโปรแกรมที่ล็อก ({junkCleanResult.runningBlockers.length} ตัว) แล้วล้างใหม่</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Detected Running Blocker Programs */}
+                  {junkCleanResult.failedCount > 0 && junkCleanResult.runningBlockers && junkCleanResult.runningBlockers.length > 0 && (
+                    <div className="pt-2 border-t border-amber-500/20">
+                      <div className="text-[11px] font-semibold text-amber-300 mb-1.5 flex items-center gap-1.5">
+                        <Terminal className="w-3.5 h-3.5" />
+                        <span>โปรแกรมที่ตรวจพบว่าเปิดทำงานอยู่และอาจล็อกไฟล์ไว้:</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {junkCleanResult.runningBlockers.map((b) => (
+                          <div
+                            key={b.pid}
+                            className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-amber-900/40 text-amber-200 border border-amber-500/30 text-xs font-mono"
+                          >
+                            <span className="font-bold">{b.processName}</span>
+                            <span className="text-[10px] text-amber-400">(PID {b.pid})</span>
+                            <button
+                              onClick={() => handleKillProcess(b.pid, b.processName)}
+                              className="px-1.5 py-0.5 rounded bg-rose-600/40 hover:bg-rose-600 text-white text-[10px] transition"
+                            >
+                              ปิดโปรเซส
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Locked Files Expandable List */}
+                  {junkCleanResult.failedCount > 0 && junkCleanResult.lockedFiles && junkCleanResult.lockedFiles.length > 0 && (
+                    <details className="text-xs text-amber-300/80 cursor-pointer pt-1">
+                      <summary className="hover:text-amber-200 font-medium select-none flex items-center gap-1">
+                        <span>ดูรายละเอียดไฟล์ที่ติดล็อก ({junkCleanResult.lockedFiles.length} รายการแรก)</span>
+                      </summary>
+                      <div className="mt-2 space-y-1 pl-2 font-mono text-[11px] max-h-36 overflow-y-auto bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+                        {junkCleanResult.lockedFiles.map((f, idx) => (
+                          <div key={idx} className="truncate text-slate-300">
+                            • <span className="text-amber-200 font-bold">{f.name}</span>{' '}
+                            <span className="text-rose-400/90 font-sans">({f.reason})</span>
+                            <span className="text-slate-500 text-[10px] block truncate">{f.path}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              )}
+
               {/* Junk Categories List */}
               <div className="space-y-4">
                 {junkCategories.length === 0 ? (
@@ -1573,10 +1944,10 @@ export default function App() {
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <h1 className="text-xl md:text-2xl font-bold text-white">
-                    พอร์ต, บริการ Windows & ตัวปลดล็อกโปรแกรม
+                    พอร์ต, โปรแกรมพื้นหลัง & ตัวตรวจจับข้อขัดแย้ง
                   </h1>
                   <p className="text-sm text-slate-400">
-                    ตรวจจับ Service แต่ละอันว่าใช้พอร์ตอะไร (เช่น vgc, mosquitto) และปลดล็อกโปรแกรมที่ขวางการถอนการติดตั้ง
+                    ตรวจสอบโปรแกรมพื้นหลังทั้งหมด (ย่อดรอปดาวน์), เช็คโปรแกรมขัดการทำงาน/ชนกัน, เช็คพอร์ต & Service (เช่น vgc) และตัวปลดล็อกการถอนการติดตั้ง
                   </p>
                 </div>
 
@@ -1585,12 +1956,14 @@ export default function App() {
                     onClick={() => {
                       (window as any).electronAPI?.scanActivePorts?.().then((p: any) => p && setPorts(p));
                       (window as any).electronAPI?.getWindowsServices?.().then((s: any) => s && setWindowsServices(s));
-                      showToast('รีเฟรชสำเร็จ', 'อัปเดตรายชื่อพอร์ตและเซอร์วิสล่าสุดแล้ว', 'info');
+                      handleScanBackground();
+                      handleScanConflicts();
+                      showToast('รีเฟรชสำเร็จ', 'อัปเดตข้อมูลพอร์ต, โปรแกรมพื้นหลัง และข้อขัดแย้งล่าสุดแล้ว', 'info');
                     }}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs border border-slate-700 transition"
                   >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>รีเฟรชพอร์ต & บริการ</span>
+                    <RefreshCw className={`w-3.5 h-3.5 ${isScanningBackground || isScanningConflicts ? 'animate-spin text-indigo-400' : ''}`} />
+                    <span>รีเฟรชทั้งหมด</span>
                   </button>
                 </div>
               </div>
@@ -1618,10 +1991,46 @@ export default function App() {
                   }`}
                 >
                   <Zap className="w-3.5 h-3.5" />
-                  <span>เช็ค Service & Port (เช่น vgc, mosquitto)</span>
+                  <span>เช็ค Service & Port (เช่น vgc)</span>
                   <span className="px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300 text-[11px]">
                     {windowsServices.length}
                   </span>
+                </button>
+
+                <button
+                  onClick={() => setPortSubTab('background')}
+                  className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 ${
+                    portSubTab === 'background'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25'
+                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>โปรแกรมพื้นหลังทั้งหมด (ย่อดรอปดาวน์)</span>
+                  <span className="px-1.5 py-0.2 rounded-full bg-indigo-500/20 text-indigo-300 text-[11px] font-bold">
+                    {backgroundProcs.length}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setPortSubTab('conflicts')}
+                  className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 ${
+                    portSubTab === 'conflicts'
+                      ? 'bg-rose-600 text-white shadow-md shadow-rose-600/25'
+                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>ตรวจจับโปรแกรมขัดการทำงาน</span>
+                  {conflicts.length > 0 ? (
+                    <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[11px] font-bold animate-pulse">
+                      {conflicts.length}
+                    </span>
+                  ) : (
+                    <span className="px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-400 text-[11px]">
+                      0
+                    </span>
+                  )}
                 </button>
 
                 <button
@@ -1633,7 +2042,7 @@ export default function App() {
                   }`}
                 >
                   <Unlock className="w-3.5 h-3.5" />
-                  <span>โปรแกรมที่ซ่อนอยู่ / ขวางการถอนการติดตั้ง</span>
+                  <span>ตัวปลดล็อกถอนการติดตั้ง</span>
                   {blockerResults.blockers.length > 0 && (
                     <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[11px]">
                       {blockerResults.blockers.length}
@@ -1974,7 +2383,478 @@ export default function App() {
               )}
 
               {/* =============================================================
-                  SUB-TAB 4.3: UNINSTALL BLOCKERS & HIDDEN TASKS
+                  SUB-TAB 4.3: ALL BACKGROUND PROCESSES (โปรแกรมพื้นหลังทั้งหมด - ย่อดรอปดาวน์)
+              ============================================================= */}
+              {portSubTab === 'background' && (
+                <div className="space-y-4">
+                  {/* Top Control Bar with Dropdown selector, search, sort, and collapse toggles */}
+                  <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                          <Layers className="w-4 h-4 text-indigo-400" />
+                          <span>โปรแกรมและโปรเซสที่ทำงานอยู่เบื้องหลังทั้งหมด ({backgroundProcs.length} โปรเซส)</span>
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          แสดงโปรแกรมเบื้องหลังที่ไม่มีหน้าต่าง แยกหมวดหมู่แอปผู้ใช้ เซอร์วิส และโปรเซสระบบ สามารถย่อขยายแบบดรอปดาวน์ได้
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Quick Accordion Toggle Buttons */}
+                        <button
+                          onClick={() => {
+                            setExpandedBgGroups({
+                              user_app: false,
+                              service: false,
+                              windows_app: false,
+                              system: false,
+                              other: false
+                            });
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 transition"
+                        >
+                          ย่อทั้งหมด (Collapse All)
+                        </button>
+                        <button
+                          onClick={() => {
+                            setExpandedBgGroups({
+                              user_app: true,
+                              service: true,
+                              windows_app: true,
+                              system: true,
+                              other: true
+                            });
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 transition"
+                        >
+                          ขยายทั้งหมด (Expand All)
+                        </button>
+                        <button
+                          onClick={handleScanBackground}
+                          disabled={isScanningBackground}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 transition"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isScanningBackground ? 'animate-spin' : ''}`} />
+                          <span>รีเฟรชโปรเซส</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Filter & Search Bar */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-slate-800/80">
+                      {/* Search */}
+                      <div className="relative">
+                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          value={backgroundSearch}
+                          onChange={(e) => setBackgroundSearch(e.target.value)}
+                          placeholder="ค้นหาชื่อโปรแกรม, PID, หรือพาธ..."
+                          className="w-full pl-9 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      {/* Category Dropdown ("ย่อดรอปดาวน์เอา") */}
+                      <div className="relative">
+                        <select
+                          value={backgroundCategoryFilter}
+                          onChange={(e) => setBackgroundCategoryFilter(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer"
+                        >
+                          <option value="all">📂 หมวดหมู่: แสดงทั้งหมด ({backgroundProcs.length} โปรเซส)</option>
+                          <option value="user_app">👤 แอปผู้ใช้เบื้องหลัง ({backgroundProcs.filter((p) => p.category === 'user_app').length} โปรเซส)</option>
+                          <option value="service">⚙️ เซอร์วิสของ Windows ({backgroundProcs.filter((p) => p.category === 'service').length} โปรเซส)</option>
+                          <option value="windows_app">🪟 แอปเสริมของ Windows ({backgroundProcs.filter((p) => p.category === 'windows_app').length} โปรเซส)</option>
+                          <option value="system">🛡️ โปรเซสแกนหลักระบบ ({backgroundProcs.filter((p) => p.category === 'system').length} โปรเซส)</option>
+                          <option value="other">📦 อื่นๆ ({backgroundProcs.filter((p) => p.category === 'other').length} โปรเซส)</option>
+                        </select>
+                      </div>
+
+                      {/* Sort Dropdown */}
+                      <div className="relative">
+                        <select
+                          value={backgroundSortBy}
+                          onChange={(e) => setBackgroundSortBy(e.target.value as any)}
+                          className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer"
+                        >
+                          <option value="ram">⚡ เรียงตาม: แรมที่ใช้ (มากไปน้อย)</option>
+                          <option value="name">🔤 เรียงตาม: ชื่อโปรเซส (A-Z)</option>
+                          <option value="pid">🔢 เรียงตาม: หมายเลข PID</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Accordion / Dropdown Group Sections ("ย่อดรอปดาวน์เอา") */}
+                  <div className="space-y-3">
+                    {[
+                      {
+                        key: 'user_app',
+                        title: '1. แอปผู้ใช้และโปรแกรมบุคคลที่สาม (User Background Apps)',
+                        desc: 'โปรแกรมที่ติดตั้งเพิ่มและทำงานอยู่เบื้องหลัง เช่น Discord, Steam, Spotify, Riot, เบราว์เซอร์ helper',
+                        badge: 'แอปผู้ใช้',
+                        badgeColor: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300',
+                        headerBg: 'from-slate-900 via-indigo-950/20 to-slate-900',
+                        items: groupedBackgroundProcs.user_app
+                      },
+                      {
+                        key: 'service',
+                        title: '2. เซอร์วิสของ Windows และโฮสต์บริการ (Windows Services & Host Workers)',
+                        desc: 'กระบวนการ Service เบื้องหลังของระบบปฏิบัติการและ svchost.exe',
+                        badge: 'Service',
+                        badgeColor: 'border-violet-500/30 bg-violet-500/10 text-violet-300',
+                        headerBg: 'from-slate-900 via-violet-950/20 to-slate-900',
+                        items: groupedBackgroundProcs.service
+                      },
+                      {
+                        key: 'windows_app',
+                        title: '3. แอปเสริมของระบบ Windows (Windows Background Apps)',
+                        desc: 'โปรเซสเสริมของระบบ Windows เช่น SearchHost, StartMenu, Widgets',
+                        badge: 'Windows App',
+                        badgeColor: 'border-sky-500/30 bg-sky-500/10 text-sky-300',
+                        headerBg: 'from-slate-900 via-sky-950/20 to-slate-900',
+                        items: groupedBackgroundProcs.windows_app
+                      },
+                      {
+                        key: 'system',
+                        title: '4. โปรเซสแกนหลักระบบ (Windows System Core)',
+                        desc: 'งานระดับแกนกลางของ Windows OS เช่น csrss, lsass, services, wininit (ไม่แนะนำให้ปิด)',
+                        badge: 'Core System',
+                        badgeColor: 'border-slate-600/30 bg-slate-800 text-slate-300',
+                        headerBg: 'from-slate-900 to-slate-950',
+                        items: groupedBackgroundProcs.system
+                      },
+                      {
+                        key: 'other',
+                        title: '5. งานและโปรเซสเบื้องหลังอื่นๆ (Other Background Tasks)',
+                        desc: 'โปรเซสพื้นหลังทั่วไปอื่นๆ ที่กำลังทำงานอยู่',
+                        badge: 'General',
+                        badgeColor: 'border-slate-700 bg-slate-800/60 text-slate-400',
+                        headerBg: 'from-slate-900 to-slate-950',
+                        items: groupedBackgroundProcs.other
+                      }
+                    ]
+                      .filter((group) => {
+                        if (backgroundCategoryFilter !== 'all') {
+                          return group.key === backgroundCategoryFilter;
+                        }
+                        return group.items.length > 0;
+                      })
+                      .map((group) => {
+                        const isExpanded = !!expandedBgGroups[group.key];
+                        const totalMemMB = group.items.reduce((acc: number, p: any) => acc + (p.memoryMB || 0), 0);
+                        return (
+                          <div
+                            key={group.key}
+                            className="rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden transition-all"
+                          >
+                            {/* Accordion Header (Click to collapse / expand dropdown) */}
+                            <button
+                              onClick={() => {
+                                setExpandedBgGroups((prev) => ({
+                                  ...prev,
+                                  [group.key]: !prev[group.key]
+                                }));
+                              }}
+                              className={`w-full p-4 bg-gradient-to-r ${group.headerBg} flex items-center justify-between text-left hover:bg-slate-800/40 transition select-none`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="p-1 rounded-lg bg-slate-800 text-slate-300">
+                                  {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-bold text-sm text-white">{group.title}</span>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${group.badgeColor}`}>
+                                      {group.badge}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-slate-400 mt-0.5 truncate">{group.desc}</p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3 shrink-0 ml-2">
+                                <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                                  {formatSize(totalMemMB)}
+                                </span>
+                                <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
+                                  {group.items.length} รายการ
+                                </span>
+                              </div>
+                            </button>
+
+                            {/* Accordion Content */}
+                            {isExpanded && (
+                              <div className="divide-y divide-slate-800/60 border-t border-slate-800/80">
+                                {group.items.length === 0 ? (
+                                  <div className="p-6 text-center text-xs text-slate-500">
+                                    ไม่พบโปรเซสในหมวดหมู่นี้
+                                  </div>
+                                ) : (
+                                  group.items.map((proc: any) => (
+                                    <div
+                                      key={proc.id}
+                                      className="p-3.5 pl-6 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-slate-800/30 transition text-xs"
+                                    >
+                                      <div className="min-w-0 flex-1 space-y-1">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="font-bold text-sm text-white font-mono">{proc.processName}</span>
+                                          <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
+                                            PID: {proc.pid}
+                                          </span>
+                                          {proc.serviceName && (
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 font-mono border border-violet-500/30">
+                                              Service: {proc.serviceName}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-[11px] text-slate-400 font-mono truncate max-w-xl">
+                                          {proc.path || '<ไม่มีพาธระบุ / ระบบจำกัดสิทธิ์>'}
+                                        </div>
+                                        <div className="text-[10px] text-slate-500">
+                                          {proc.company} • {proc.description}
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-3 shrink-0">
+                                        <div className="text-right">
+                                          <div className="font-mono font-bold text-xs text-amber-400">
+                                            {formatSize(proc.memoryMB)}
+                                          </div>
+                                          <div className="text-[10px] text-slate-500">หน่วยความจำ</div>
+                                        </div>
+
+                                        <div className="flex items-center gap-1.5">
+                                          <button
+                                            onClick={() => handleCopy(proc.pid.toString(), proc.id)}
+                                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                                            title="คัดลอก PID"
+                                          >
+                                            {copiedId === proc.id ? (
+                                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                            ) : (
+                                              <Copy className="w-3.5 h-3.5" />
+                                            )}
+                                          </button>
+                                          {proc.path && (
+                                            <button
+                                              onClick={() => handleOpenFolder(proc.path)}
+                                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                                              title="เปิดโฟลเดอร์ใน Explorer"
+                                            >
+                                              <FolderOpen className="w-3.5 h-3.5" />
+                                            </button>
+                                          )}
+                                          <button
+                                            onClick={() => handleKillProcess(proc.pid, proc.processName)}
+                                            className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold text-[11px] transition"
+                                            title="ปิดโปรเซสนี้"
+                                          >
+                                            ปิดโปรเซส
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+              {/* =============================================================
+                  SUB-TAB 4.4: CONFLICT & COLLISION DETECTOR (เช็คโปรแกรมขัดการทำงานกัน)
+              ============================================================= */}
+              {portSubTab === 'conflicts' && (
+                <div className="space-y-5">
+                  {/* Top Header Card */}
+                  <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-rose-950/30 to-slate-900 border border-rose-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Flame className="w-5 h-5 text-rose-400" />
+                        <h3 className="text-base font-bold text-white">
+                          ระบบตรวจจับโปรแกรมที่ขัดการทำงานและชนกัน (Conflict & Collision Inspector)
+                        </h3>
+                      </div>
+                      <p className="text-xs text-slate-300 max-w-2xl">
+                        วิเคราะห์ 4 สาเหตุหลัก: พอร์ตชนกัน (Port Collisions), โปรเซสเปิดค้างซ้ำซ้อนแย่งล็อกไฟล์ (Multi-Instance Locks), โปรเซสระดับลึก/Anti-Cheat ที่ขวางการถอนการติดตั้ง, และโปรแกรมเบื้องหลังที่แย่งแรมผิดปกติ
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={handleScanConflicts}
+                      disabled={isScanningConflicts}
+                      className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30 transition flex items-center justify-center gap-2 shrink-0"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isScanningConflicts ? 'animate-spin' : ''}`} />
+                      <span>สแกนข้อขัดแย้งใหม่</span>
+                    </button>
+                  </div>
+
+                  {/* Filter Badges */}
+                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                    <button
+                      onClick={() => setConflictFilter('all')}
+                      className={`px-3 py-1 rounded-xl font-medium transition ${
+                        conflictFilter === 'all'
+                          ? 'bg-rose-600 text-white shadow-md shadow-rose-600/25'
+                          : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                      }`}
+                    >
+                      ข้อขัดแย้งทั้งหมด ({conflicts.length})
+                    </button>
+                    <button
+                      onClick={() => setConflictFilter('critical')}
+                      className={`px-3 py-1 rounded-xl font-medium transition ${
+                        conflictFilter === 'critical'
+                          ? 'bg-rose-600 text-white shadow-md shadow-rose-600/25'
+                          : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                      }`}
+                    >
+                      ระดับร้ายแรง / พอร์ตชน ({conflicts.filter((c) => c.severity === 'critical').length})
+                    </button>
+                    <button
+                      onClick={() => setConflictFilter('warning')}
+                      className={`px-3 py-1 rounded-xl font-medium transition ${
+                        conflictFilter === 'warning'
+                          ? 'bg-rose-600 text-white shadow-md shadow-rose-600/25'
+                          : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                      }`}
+                    >
+                      ระดับแจ้งเตือน / โปรเซสค้าง ({conflicts.filter((c) => c.severity === 'warning').length})
+                    </button>
+                    <button
+                      onClick={() => setConflictFilter('info')}
+                      className={`px-3 py-1 rounded-xl font-medium transition ${
+                        conflictFilter === 'info'
+                          ? 'bg-rose-600 text-white shadow-md shadow-rose-600/25'
+                          : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                      }`}
+                    >
+                      แย่งแรมสูง ({conflicts.filter((c) => c.severity === 'info').length})
+                    </button>
+                  </div>
+
+                  {/* Conflict Items List */}
+                  {filteredConflicts.length === 0 ? (
+                    <div className="p-8 text-center bg-slate-900/60 rounded-2xl border border-slate-800 space-y-2">
+                      <ShieldCheck className="w-10 h-10 text-emerald-400 mx-auto" />
+                      <div className="text-base font-bold text-white">ระบบทำงานราบรื่น ไม่พบข้อขัดแย้ง</div>
+                      <p className="text-xs text-slate-400 max-w-md mx-auto">
+                        ไม่มีพอร์ตชนกัน และไม่พบโปรเซสที่รันค้างแย่งทรัพยากรหรือล็อกระบบในขณะนี้
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredConflicts.map((conflict) => {
+                        const isCritical = conflict.severity === 'critical';
+                        const isWarning = conflict.severity === 'warning';
+                        return (
+                          <div
+                            key={conflict.id}
+                            className={`p-5 rounded-2xl border transition space-y-4 ${
+                              isCritical
+                                ? 'bg-rose-950/30 border-rose-500/50 shadow-lg shadow-rose-950/20'
+                                : isWarning
+                                ? 'bg-amber-950/20 border-amber-500/40 shadow-lg shadow-amber-950/10'
+                                : 'bg-sky-950/20 border-sky-500/30'
+                            }`}
+                          >
+                            {/* Conflict Header */}
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span
+                                    className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                                      isCritical
+                                        ? 'bg-rose-500/30 text-rose-300 border border-rose-500/40'
+                                        : isWarning
+                                        ? 'bg-amber-500/30 text-amber-300 border border-amber-500/40'
+                                        : 'bg-sky-500/30 text-sky-300 border border-sky-500/40'
+                                    }`}
+                                  >
+                                    {isCritical ? 'ร้ายแรง (Critical Collision)' : isWarning ? 'แจ้งเตือน (Conflict Warning)' : 'ใช้ทรัพยากรสูง'}
+                                  </span>
+                                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
+                                    {conflict.type}
+                                  </span>
+                                </div>
+                                <h4 className="text-base font-bold text-white pt-1">{conflict.title}</h4>
+                                <p className="text-xs text-slate-300">{conflict.description}</p>
+                              </div>
+
+                              {conflict.canAutoResolve && (
+                                <button
+                                  onClick={() => handleResolveConflict(conflict)}
+                                  disabled={resolvingConflictId === conflict.id}
+                                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-rose-600/30 transition flex items-center gap-1.5 shrink-0"
+                                >
+                                  <Zap className="w-3.5 h-3.5" />
+                                  <span>
+                                    {resolvingConflictId === conflict.id ? 'กำลังปลดล็อก...' : '⚡ ปิดโปรเซสที่ขัดแย้งทันที'}
+                                  </span>
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Involved Programs */}
+                            <div className="rounded-xl bg-slate-950/70 border border-slate-800/80 p-3 space-y-2">
+                              <div className="text-[11px] font-semibold text-slate-400">
+                                โปรแกรมที่เกี่ยวข้องในข้อขัดแย้งนี้ ({conflict.conflictingPrograms?.length || 0} ตัว):
+                              </div>
+                              <div className="divide-y divide-slate-800/50">
+                                {conflict.conflictingPrograms?.map((p: any, idx: number) => (
+                                  <div key={idx} className="py-2 flex items-center justify-between gap-3 text-xs">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-bold text-white font-mono">{p.processName}</span>
+                                        <span className="text-[11px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
+                                          PID: {p.pid}
+                                        </span>
+                                        <span className="text-slate-400 text-[11px] truncate">({p.role})</span>
+                                      </div>
+                                      {p.path && (
+                                        <div className="text-[10px] text-slate-500 font-mono truncate max-w-lg mt-0.5">
+                                          {p.path}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <span className="text-amber-400 font-mono text-xs font-bold">
+                                        {formatSize(p.memoryMB)}
+                                      </span>
+                                      <button
+                                        onClick={() => handleKillProcess(p.pid, p.processName)}
+                                        className="px-2 py-0.5 rounded bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/30 text-[10px] font-semibold transition"
+                                      >
+                                        Kill
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Suggested Action Note */}
+                            <div className="text-xs text-slate-300 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 flex items-center gap-2">
+                              <span className="text-indigo-400 font-bold">คำแนะนำ:</span>
+                              <span>{conflict.suggestedAction}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* =============================================================
+                  SUB-TAB 4.5: UNINSTALL BLOCKERS & HIDDEN TASKS
                   (โปรแกรมที่ซ่อนอยู่ หรือ ที่ทำงานอยู่ เป็นสาเหตุที่ถอนติดตั้งไม่ได้)
               ============================================================= */}
               {portSubTab === 'blockers' && (
@@ -2449,53 +3329,80 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Setting 3: Proper Windows Uninstall Instructions */}
+              {/* Setting 3: Proper Windows Uninstall & 1-Click Removal */}
               <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-rose-950/20 to-slate-900 border border-rose-500/30 space-y-4">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-rose-400" />
-                  <h3 className="text-sm font-bold text-white">
-                    คำแนะนำในการถอนการติดตั้งโปรแกรม (Uninstallation Guide)
-                  </h3>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Trash2 className="w-5 h-5 text-rose-400" />
+                    <h3 className="text-sm font-bold text-white">
+                      การถอนการติดตั้งโปรแกรม (Uninstallation)
+                    </h3>
+                  </div>
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-medium">
+                    ✓ ปลดล็อกถอนการติดตั้งทันที ไม่ต้อง Restart
+                  </span>
                 </div>
 
                 <div className="text-xs text-slate-300 space-y-2 leading-relaxed">
                   <p>
-                    ตามมาตรฐานความปลอดภัยและความเรียบร้อยของระบบปฏิบัติการ Windows โปรแกรม <b>System Storage & Port Inspector</b> จะไม่มีปุ่มสั่งถอนการติดตั้งภายในตัวแอปพลิเคชันโดยตรง เพื่อป้องกันการลบตัวเองขณะที่ตัวโปรแกรมกำลังทำงานอยู่
+                    ระบบถอนการติดตั้งได้รับการอัปเกรดให้ตัดการทำงานของโปรเซสและเซอร์วิสที่เกี่ยวข้องโดยอัตโนมัติก่อนลบไฟล์ เพื่อป้องกันปัญหาไฟล์ถูกล็อกและ<b>ไม่ต้องรีสตาร์ทเครื่องคอมพิวเตอร์ (No Reboot Required)</b> สามารถเลือกช่องทางถอนการติดตั้งได้ตามสะดวก:
                   </p>
-                  <p>
-                    คุณสามารถถอนการติดตั้งโปรแกรมนี้ได้อย่างหมดจด 100% ผ่านช่องทางมาตรฐานของ Windows ได้ตลอดเวลา:
-                  </p>
-                  <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2 text-[11px]">
-                    <div className="flex items-start gap-2">
-                      <span className="font-bold text-rose-400">วิธีที่ 1 (แนะนำ):</span>
-                      <span>
-                        เปิด <b>Windows Settings &gt; Apps &gt; Installed apps</b> (หรือกดปุ่ม Windows พิมพ์ "Add or remove programs") ค้นหา "System Storage & Port Inspector" แล้วกดปุ่ม <b>Uninstall</b>
-                      </span>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                    <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2 text-[11px]">
+                      <div className="font-bold text-rose-400 flex items-center gap-1.5">
+                        <Zap className="w-3.5 h-3.5" />
+                        <span>ช่องทางที่ 1 (สะดวกสุด)</span>
+                      </div>
+                      <p className="text-slate-400">
+                        กดปุ่ม <b>"ถอนการติดตั้งทันที"</b> ด้านล่าง โปรแกรมจะปิดตัวและถอนการติดตั้งอัตโนมัติ
+                      </p>
                     </div>
-                    <div className="flex items-start gap-2">
-                      <span className="font-bold text-rose-400">วิธีที่ 2:</span>
-                      <span>
-                        เปิดโฟลเดอร์ที่ติดตั้งโปรแกรม แล้วดับเบิ้ลคลิกไฟล์ <b>uninstall.bat</b> หรือกดช็อตคัต <b>Uninstall System Storage & Port Inspector</b> ใน Start Menu
-                      </span>
+
+                    <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2 text-[11px]">
+                      <div className="font-bold text-indigo-400 flex items-center gap-1.5">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>ช่องทางที่ 2 (มาตรฐาน Windows)</span>
+                      </div>
+                      <p className="text-slate-400">
+                        เปิด <b>Add or remove programs</b> ใน Windows Settings แล้วเลือก Uninstall
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2 text-[11px]">
+                      <div className="font-bold text-amber-400 flex items-center gap-1.5">
+                        <FolderOpen className="w-3.5 h-3.5" />
+                        <span>ช่องทางที่ 3 (ไฟล์ระบบ)</span>
+                      </div>
+                      <p className="text-slate-400">
+                        รันไฟล์ <b>uninstall.bat</b> ในโฟลเดอร์ติดตั้ง หรือกดช็อตคัตใน Start Menu
+                      </p>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 pt-2">
                   <button
+                    onClick={() => setShowUninstallModal(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md shadow-rose-600/30 transition active:scale-95"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>ถอนการติดตั้งโปรแกรมทันที (1-Click Uninstall)</span>
+                  </button>
+
+                  <button
                     onClick={() => (window as any).electronAPI?.openWindowsAddRemove?.()}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    <span>เปิดหน้า Add or Remove Programs ใน Windows ทันที</span>
+                    <span>เปิดหน้า Add or Remove Programs</span>
                   </button>
 
                   <button
                     onClick={() => (window as any).electronAPI?.openInstallFolder?.()}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-semibold border border-slate-800 transition"
                   >
                     <FolderOpen className="w-3.5 h-3.5" />
-                    <span>เปิดโฟลเดอร์ไฟล์ติดตั้งของโปรแกรม</span>
+                    <span>เปิดโฟลเดอร์ไฟล์ติดตั้ง</span>
                   </button>
                 </div>
               </div>
@@ -2550,6 +3457,65 @@ export default function App() {
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for 1-Click Uninstall */}
+      {showUninstallModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-rose-500/40 rounded-2xl p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">
+                <AlertTriangle className="w-6 h-6 text-rose-500" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">ยืนยันการถอนการติดตั้ง</h3>
+                <p className="text-xs text-rose-300/80">System Storage &amp; Port Inspector</p>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-300 space-y-2 bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 leading-relaxed">
+              <p>
+                คุณต้องการถอนการติดตั้งโปรแกรม <b>System Storage &amp; Port Inspector</b> ออกจากเครื่องคอมพิวเตอร์ใช่หรือไม่?
+              </p>
+              <div className="text-[11px] text-emerald-400 bg-emerald-950/30 p-2.5 rounded-lg border border-emerald-500/20 space-y-1">
+                <p className="font-semibold flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>ไม่ต้อง Restart คอมพิวเตอร์ (No Reboot Required):</span>
+                </p>
+                <p className="text-slate-300">
+                  ระบบจะปิดโปรเซสของแอป และเริ่มขั้นตอนถอนการติดตั้งของ Windows ให้โดยอัตโนมัติ ไม่มีการค้างไฟล์หรือบังคับรีสตาร์ทเครื่อง
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                disabled={isUninstalling}
+                onClick={() => setShowUninstallModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition"
+              >
+                ยกเลิก
+              </button>
+              <button
+                disabled={isUninstalling}
+                onClick={handleDirectUninstall}
+                className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 rounded-xl transition shadow-lg shadow-rose-600/30"
+              >
+                {isUninstalling ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>กำลังเริ่มการถอนการติดตั้ง...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>ยืนยันถอนการติดตั้ง</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

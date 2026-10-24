@@ -156,6 +156,22 @@ ipcMain.handle('open-install-folder', () => {
   systemService.openInstallFolder();
 });
 
+ipcMain.handle('uninstall-self', async () => {
+  return systemService.uninstallSelf();
+});
+
+ipcMain.handle('get-all-background-processes', async () => {
+  return await systemService.getAllBackgroundProcesses();
+});
+
+ipcMain.handle('detect-program-conflicts', async () => {
+  return await systemService.detectProgramConflicts();
+});
+
+ipcMain.handle('resolve-conflict', async (_event, conflictId, pids) => {
+  return await systemService.resolveConflict(conflictId, pids);
+});
+
 app.whenReady().then(() => {
   createWindow();
 

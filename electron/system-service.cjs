@@ -432,7 +432,7 @@ function getFolderStats(folderPath, maxDepth = 2) {
   return {
     path: folderPath,
     count,
-    sizeMB: Math.max(1, Math.round(totalBytes / (1024 * 1024)))
+    sizeMB: count === 0 ? 0 : Number((totalBytes / (1024 * 1024)).toFixed(1))
   };
 }
 
@@ -617,36 +617,167 @@ async function scanRealJunk() {
   return categories;
 }
 
-// 9. Clean Real Junk Items
+// Helper to recursively get total size of a directory in bytes
+function getDirSizeBytes(dirPath) {
+  if (!fs.existsSync(dirPath)) return 0;
+  let total = 0;
+  try {
+    const stat = fs.statSync(dirPath);
+    if (!stat.isDirectory()) return stat.size;
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = path.join(dirPath, entry.name);
+      try {
+        if (entry.isDirectory()) {
+          total += getDirSizeBytes(full);
+        } else {
+          const s = fs.statSync(full);
+          total += s.size;
+        }
+      } catch (e) {}
+    }
+  } catch (e) {}
+  return total;
+}
+
+// Helper to remove read-only attribute so stubborn files can be deleted
+function clearReadOnly(targetPath) {
+  try {
+    fs.chmodSync(targetPath, 0o666);
+  } catch (e) {}
+}
+
+// 9. Clean Real Junk Items with deep cleaning, accurate before/after byte count, and locked blocker detection
 async function cleanJunkItems(items, safeRecycleBin = true) {
   let cleanedCount = 0;
-  let reclaimedMB = 0;
+  let failedCount = 0;
+  let totalReclaimedBytes = 0;
+  const lockedFiles = [];
+
+  // Query running processes to correlate locked files with open applications
+  let runningProcesses = [];
+  try {
+    const res = await runPowerShell(`Get-Process -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, MainWindowTitle, Path | ConvertTo-Json -Depth 2`);
+    if (res.success && res.data) {
+      runningProcesses = Array.isArray(res.data) ? res.data : [res.data];
+    }
+  } catch (e) {}
+
+  const activeBlockersMap = new Map();
 
   for (const item of items) {
     if (!item.path || !fs.existsSync(item.path)) continue;
 
+    const beforeBytes = getDirSizeBytes(item.path);
+
+    let entries = [];
     try {
+      entries = fs.readdirSync(item.path);
+    } catch (readErr) {
+      failedCount++;
+      lockedFiles.push({
+        name: path.basename(item.path),
+        path: item.path,
+        reason: 'ไม่สามารถเปิดอ่านโฟลเดอร์ได้ (โฟลเดอร์ถูกล็อกหรือต้องการสิทธิ์แอดมิน)'
+      });
+      continue;
+    }
+
+    for (const file of entries) {
+      const fullPath = path.join(item.path, file);
+      clearReadOnly(fullPath);
+
+      let deleted = false;
+      // 1. If safe recycle bin requested, try trashItem
       if (safeRecycleBin) {
-        await shell.trashItem(item.path);
-        cleanedCount++;
-        reclaimedMB += item.sizeMB || 0;
-      } else {
-        const files = fs.readdirSync(item.path);
-        for (const file of files) {
-          const full = path.join(item.path, file);
-          try {
-            fs.rmSync(full, { recursive: true, force: true });
-          } catch (e) {}
+        try {
+          await shell.trashItem(fullPath);
+          deleted = true;
+          cleanedCount++;
+        } catch (trashErr) {
+          // If trash fails (e.g. system file or in-use), fall back to direct force removal
         }
-        cleanedCount++;
-        reclaimedMB += item.sizeMB || 0;
       }
-    } catch (err) {
-      console.error('Error cleaning item:', item.path, err);
+
+      // 2. Direct force deletion
+      if (!deleted) {
+        try {
+          fs.rmSync(fullPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 80 });
+          deleted = true;
+          cleanedCount++;
+        } catch (rmErr) {
+          failedCount++;
+          const reason = rmErr.code === 'EBUSY' ? 'ไฟล์ถูกล็อก (In Use / EBUSY)' :
+                         rmErr.code === 'EPERM' ? 'ไม่มีสิทธิ์เข้าถึง (Access Denied / EPERM)' :
+                         (rmErr.message || 'ไฟล์ถูกโปรแกรมอื่นเปิดค้างอยู่');
+
+          // Check if file name, parent folder name, or path matches any running process
+          const lowerFile = file.toLowerCase();
+          const lowerPath = fullPath.toLowerCase();
+
+          for (const p of runningProcesses) {
+            const procName = (p.ProcessName || '').toLowerCase();
+            if (procName && (lowerPath.includes(procName) || lowerFile.includes(procName) || (p.Path && lowerPath.includes(path.dirname(p.Path).toLowerCase())))) {
+              if (!activeBlockersMap.has(p.Id)) {
+                activeBlockersMap.set(p.Id, {
+                  pid: p.Id,
+                  processName: `${p.ProcessName}.exe`,
+                  windowTitle: p.MainWindowTitle || '',
+                  path: p.Path || ''
+                });
+              }
+            }
+          }
+
+          if (lockedFiles.length < 25) {
+            lockedFiles.push({
+              name: file,
+              path: fullPath,
+              reason
+            });
+          }
+        }
+      }
+    }
+
+    // Measure actual bytes freed from this item
+    const afterBytes = getDirSizeBytes(item.path);
+    const reclaimedForThisItem = Math.max(0, beforeBytes - afterBytes);
+    totalReclaimedBytes += reclaimedForThisItem;
+  }
+
+  // If there were failed files and we haven't found specific blockers, check known common user apps
+  if (failedCount > 0 && activeBlockersMap.size === 0) {
+    const commonAppNames = ['chrome', 'msedge', 'brave', 'discord', 'spotify', 'steam', 'node', 'code', 'slack', 'vgc', 'riotclientservices'];
+    for (const p of runningProcesses) {
+      const procName = (p.ProcessName || '').toLowerCase();
+      if (commonAppNames.includes(procName)) {
+        if (!activeBlockersMap.has(p.Id)) {
+          activeBlockersMap.set(p.Id, {
+            pid: p.Id,
+            processName: `${p.ProcessName}.exe`,
+            windowTitle: p.MainWindowTitle || 'โปรแกรมที่เปิดทำงานอยู่',
+            path: p.Path || ''
+          });
+        }
+      }
     }
   }
 
-  return { success: true, cleanedCount, reclaimedMB };
+  const reclaimedMB = Number((totalReclaimedBytes / (1024 * 1024)).toFixed(1));
+  const runningBlockers = Array.from(activeBlockersMap.values()).slice(0, 10);
+
+  return {
+    success: true,
+    cleanedCount,
+    failedCount,
+    reclaimedMB,
+    lockedFiles,
+    runningBlockers,
+    summary: failedCount === 0
+      ? `ลบไฟล์ขยะเสร็จสมบูรณ์ สะอาด 100% (${cleanedCount} รายการ, คืนพื้นที่ ${reclaimedMB} MB)`
+      : `ล้างได้ ${cleanedCount} รายการ (คืนพื้นที่ ${reclaimedMB} MB) แต่มี ${failedCount} รายการที่ลบไม่ได้เนื่องจากโปรแกรมกำลังเปิดใช้งานอยู่`
+  };
 }
 
 // 10. Scan Real Large Files & Dynamic Real Directory Treemap
@@ -866,6 +997,369 @@ function openInstallFolder() {
   shell.openPath(appPath);
 }
 
+// 13.5 Perform Clean In-App Uninstallation (without requiring system reboot)
+function uninstallSelf() {
+  const electron = require('electron');
+  const app = electron.app;
+  const appPath = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(process.execPath) || process.cwd();
+  
+  const runnerScriptPath = path.join(os.tmpdir(), 'syspulse_clean_uninstall.bat');
+  const scriptContent = `@echo off
+setlocal enabledelayedexpansion
+title Uninstalling System Storage & Port Inspector...
+
+:: Wait for caller Electron process to exit gracefully
+timeout /t 2 /nobreak >nul
+
+:: Terminate any remaining app instances so no files are in use
+taskkill /F /IM "System Storage & Port Inspector.exe" /T >nul 2>&1
+timeout /t 1 /nobreak >nul
+
+:: 1. Try NSIS uninstaller if installed via NSIS
+if exist "${appPath}\\Uninstall System Storage & Port Inspector.exe" (
+    start "" /wait "${appPath}\\Uninstall System Storage & Port Inspector.exe" /S
+    goto CLEANUP
+)
+
+:: 2. Find MSI ProductCode from Registry
+set PRODUCT_CODE=
+for /f "usebackq tokens=*" %%A in (\`powershell -NoProfile -Command "try { $p = Get-ItemProperty 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'System Storage & Port Inspector' } | Select-Object -First 1; if ($p.PSChildName) { $p.PSChildName } elseif ($p.UninstallString -match '\{[A-Fa-f0-9-]+\}') { $matches[0] } } catch {}"\`) do (
+    set PRODUCT_CODE=%%A
+)
+
+if not "%PRODUCT_CODE%"=="" (
+    start "" /wait msiexec.exe /x %PRODUCT_CODE% /qb REBOOT=ReallySuppress
+    goto CLEANUP
+)
+
+:: 3. Fallback: Search with UpgradeCode
+for /f "usebackq tokens=*" %%B in (\`powershell -NoProfile -Command "try { $u = '{B6A87432-84F1-4F2A-949B-E412581699AB}'; Get-CimInstance Win32_Property -Filter \\"Property = 'UpgradeCode' and Value = '$u'\\" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ProductCode -First 1 } catch {}"\`) do (
+    set PRODUCT_CODE=%%B
+)
+
+if not "%PRODUCT_CODE%"=="" (
+    start "" /wait msiexec.exe /x %PRODUCT_CODE% /qb REBOOT=ReallySuppress
+    goto CLEANUP
+)
+
+:: 4. If neither, remove files and shortcuts cleanly
+del /f /q "%PUBLIC%\\Desktop\\System Storage & Port Inspector.lnk" >nul 2>&1
+del /f /q "%USERPROFILE%\\Desktop\\System Storage & Port Inspector.lnk" >nul 2>&1
+rd /s /q "%ProgramData%\\Microsoft\\Windows\\Start Menu\\Programs\\System Storage & Port Inspector" >nul 2>&1
+rd /s /q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\System Storage & Port Inspector" >nul 2>&1
+
+:CLEANUP
+exit
+`;
+
+  try {
+    fs.writeFileSync(runnerScriptPath, scriptContent, 'utf8');
+
+    // Launch detached uninstaller process elevated
+    const { spawn } = require('child_process');
+    spawn('powershell.exe', [
+      '-NoProfile',
+      '-WindowStyle', 'Hidden',
+      '-Command',
+      `Start-Process -FilePath "cmd.exe" -ArgumentList "/c \`"${runnerScriptPath}\`"" -Verb RunAs`
+    ], {
+      detached: true,
+      stdio: 'ignore'
+    }).unref();
+
+    setTimeout(() => {
+      app.quit();
+    }, 600);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// 14. Get All Background Processes (with grouping & window status)
+async function getAllBackgroundProcesses() {
+  const script = `
+    $procs = Get-Process -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, MainWindowHandle, MainWindowTitle, Path, WorkingSet64, Company, Description;
+
+    $services = Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Select-Object Name, DisplayName, ProcessId, State;
+    $serviceMap = @{};
+    foreach ($s in $services) {
+      if ($s.ProcessId -and $s.ProcessId -gt 0) {
+        if (-not $serviceMap.ContainsKey($s.ProcessId)) { $serviceMap[$s.ProcessId] = @() }
+        $serviceMap[$s.ProcessId] += $s.DisplayName
+      }
+    }
+
+    $results = foreach ($p in $procs) {
+      $isNoWindow = ($p.MainWindowHandle -eq 0 -or [string]::IsNullOrWhiteSpace($p.MainWindowTitle));
+      if (-not $isNoWindow) { continue } # Only background processes!
+
+      $svcNames = if ($serviceMap.ContainsKey($p.Id)) { ($serviceMap[$p.Id] -join ', ') } else { '' };
+
+      $isUserApp = ($p.Path -and ($p.Path -like "*AppData*" -or $p.Path -like "*Program Files*") -and ($p.Company -notlike "*Microsoft*"));
+      $isWindowsApp = ($p.Path -and ($p.Path -like "*AppData*" -or $p.Path -like "*Program Files*") -and ($p.Company -like "*Microsoft*"));
+      $isSvc = ($svcNames.Length -gt 0 -or $p.ProcessName -ieq 'svchost');
+      $isSys = ($p.Path -and $p.Path -like "*System32*") -or ($p.ProcessName -in @('System','Registry','smss','csrss','wininit','services','lsass','winlogon'));
+
+      $category = if ($isUserApp) { 'user_app' }
+                  elseif ($isSvc) { 'service' }
+                  elseif ($isWindowsApp) { 'windows_app' }
+                  elseif ($isSys) { 'system' }
+                  else { 'other' };
+
+      [PSCustomObject]@{
+        PID = $p.Id
+        ProcessName = "$($p.ProcessName).exe"
+        Path = if ($p.Path) { $p.Path } else { "" }
+        MainWindowHandle = $p.MainWindowHandle
+        MainWindowTitle = if ($p.MainWindowTitle) { $p.MainWindowTitle } else { "" }
+        MemoryMB = [math]::Round($p.WorkingSet64 / 1MB, 1)
+        Company = if ($p.Company) { $p.Company } else { "Unknown" }
+        Description = if ($p.Description) { $p.Description } else { $p.ProcessName }
+        ServiceName = $svcNames
+        Category = $category
+      }
+    }
+    $results | ConvertTo-Json -Depth 2
+  `;
+
+  const res = await runPowerShell(script);
+  if (!res.success || !res.data) return [];
+  const list = Array.isArray(res.data) ? res.data : [res.data];
+
+  return list.map((item, idx) => ({
+    id: `bg_${idx}_${item.PID}`,
+    pid: item.PID,
+    processName: item.ProcessName,
+    path: item.Path,
+    memoryMB: item.MemoryMB || 0,
+    company: item.Company || 'Unknown',
+    description: item.Description || item.ProcessName,
+    serviceName: item.ServiceName || '',
+    category: item.Category || 'other',
+    categoryLabel: item.Category === 'user_app' ? 'แอปผู้ใช้เบื้องหลัง (User App)' :
+                   item.Category === 'service' ? 'เซอร์วิสของ Windows (Service)' :
+                   item.Category === 'windows_app' ? 'แอปเสริมของ Windows' :
+                   item.Category === 'system' ? 'โปรเซสแกนหลักระบบ (System Core)' : 'โปรเซสเบื้องหลังทั่วไป'
+  }));
+}
+
+// 15. Detect Program Conflicts & Collisions (พอร์ตชนกัน, โปรเซสค้างซ้ำซ้อน, ตัวบล็อก, แย่งแรม)
+async function detectProgramConflicts() {
+  const script = `
+    $tcp = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, OwningProcess;
+    $udp = Get-NetUDPEndpoint -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, OwningProcess;
+    $allPorts = @($tcp) + @($udp);
+
+    $procs = Get-Process -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, MainWindowHandle, MainWindowTitle, Path, WorkingSet64, Company, Description;
+    $procMap = @{};
+    foreach ($p in $procs) { $procMap[[int]$p.Id] = $p }
+
+    # 1. Port Collisions (Multiple different PIDs on same port)
+    $portGroups = $allPorts | Group-Object LocalPort | Where-Object {
+      $pids = ($_.Group.OwningProcess | Select-Object -Unique);
+      $pids.Count -gt 1
+    };
+
+    $portCollisions = @();
+    foreach ($pg in $portGroups) {
+      $uniquePids = ($pg.Group.OwningProcess | Select-Object -Unique);
+      $involved = @();
+      foreach ($pidNum in $uniquePids) {
+        $pr = $procMap[[int]$pidNum];
+        $involved += [PSCustomObject]@{
+          PID = [int]$pidNum
+          ProcessName = if ($pr -and $pr.ProcessName) { "$($pr.ProcessName).exe" } else { "PID: $pidNum" }
+          Path = if ($pr -and $pr.Path) { $pr.Path } else { "" }
+          MemoryMB = if ($pr -and $pr.WorkingSet64) { [math]::Round($pr.WorkingSet64 / 1MB, 1) } else { 0 }
+        }
+      }
+      $portCollisions += [PSCustomObject]@{
+        Port = $pg.Name
+        Count = $uniquePids.Count
+        Processes = $involved
+      }
+    }
+
+    # 2. Multi-Instance Rogue Apps (Excluding known browser multi-process engines & host workers)
+    $ignoredNames = @('svchost','conhost','runtimebroker','dllhost','SearchHost','chrome','msedge','brave','firefox','electron','Code','WmiPrvSE','backgroundTaskHost','WUDFHost','powershell','cmd','msedgewebview2','sihost','dwm');
+    $dups = $procs | Where-Object { $_.ProcessName -notin $ignoredNames } | Group-Object ProcessName | Where-Object { $_.Count -ge 3 };
+    $dupApps = @();
+    foreach ($d in $dups) {
+      $items = @();
+      foreach ($pr in $d.Group) {
+        $items += [PSCustomObject]@{
+          PID = $pr.Id
+          ProcessName = "$($pr.ProcessName).exe"
+          Path = if ($pr.Path) { $pr.Path } else { "" }
+          MemoryMB = [math]::Round($pr.WorkingSet64 / 1MB, 1)
+        }
+      }
+      $dupApps += [PSCustomObject]@{
+        ProcessName = $d.Name
+        Count = $d.Count
+        TotalMemoryMB = [math]::Round(($d.Group | Measure-Object -Property WorkingSet64 -Sum).Sum / 1MB, 1)
+        Processes = $items
+      }
+    }
+
+    # 3. Known Blockers & Anti-Cheats (vgc, EasyAntiCheat, etc.)
+    $blockerKeywords = @('vgc', 'easyanticheat', 'beservice', 'riotclientservices', 'epiconlineservices');
+    $foundBlockers = @();
+    foreach ($p in $procs) {
+      $pName = $p.ProcessName.ToLower();
+      foreach ($bk in $blockerKeywords) {
+        if ($pName -like "*$bk*") {
+          $foundBlockers += [PSCustomObject]@{
+            PID = $p.Id
+            ProcessName = "$($p.ProcessName).exe"
+            Path = if ($p.Path) { $p.Path } else { "" }
+            MemoryMB = [math]::Round($p.WorkingSet64 / 1MB, 1)
+            Description = if ($p.Description) { $p.Description } else { $p.ProcessName }
+          }
+          break
+        }
+      }
+    }
+
+    # 4. Heavy Background Memory Hogs (> 800 MB in background without window)
+    $heavyBg = @();
+    foreach ($p in $procs) {
+      $isNoWin = ($p.MainWindowHandle -eq 0 -or [string]::IsNullOrWhiteSpace($p.MainWindowTitle));
+      $memMB = [math]::Round($p.WorkingSet64 / 1MB, 1);
+      if ($isNoWin -and $memMB -gt 800 -and $p.ProcessName -notin @('Memory Compression','System')) {
+        $heavyBg += [PSCustomObject]@{
+          PID = $p.Id
+          ProcessName = "$($p.ProcessName).exe"
+          Path = if ($p.Path) { $p.Path } else { "" }
+          MemoryMB = $memMB
+          Description = if ($p.Description) { $p.Description } else { $p.ProcessName }
+        }
+      }
+    }
+
+    [PSCustomObject]@{
+      PortCollisions = $portCollisions
+      DuplicateApps = $dupApps
+      Blockers = $foundBlockers
+      HeavyHogs = $heavyBg
+    } | ConvertTo-Json -Depth 5
+  `;
+
+  const res = await runPowerShell(script);
+  if (!res.success || !res.data) return [];
+
+  const conflicts = [];
+
+  // Parse Port Collisions
+  const portCollisions = Array.isArray(res.data.PortCollisions) ? res.data.PortCollisions : (res.data.PortCollisions ? [res.data.PortCollisions] : []);
+  for (const pc of portCollisions) {
+    const procs = Array.isArray(pc.Processes) ? pc.Processes : (pc.Processes ? [pc.Processes] : []);
+    const procNames = procs.map(p => p.ProcessName).join(' vs ');
+    conflicts.push({
+      id: `conf_port_${pc.Port}`,
+      type: 'port_collision',
+      severity: 'critical',
+      title: `พอร์ต ${pc.Port} เกิดการแย่งใช้งานชนกัน (Port Collision)`,
+      description: `มีโปรเซส ${procs.length} ตัว (${procNames}) พยายามเปิดดักฟังหรือแย่งใช้งานพอร์ต ${pc.Port} พร้อมกัน ทำให้โปรแกรมอื่นเชื่อมต่อไม่ได้หรือเกิดข้อผิดพลาด`,
+      suggestedAction: `ปิดโปรเซสตัวใดตัวหนึ่งที่ไม่ได้ใช้งาน เพื่อคืนสิทธิ์ให้พอร์ต ${pc.Port}`,
+      conflictingPrograms: procs.map(p => ({
+        pid: p.PID,
+        processName: p.ProcessName,
+        path: p.Path,
+        memoryMB: p.MemoryMB,
+        role: `กำลังใช้งานพอร์ต ${pc.Port}`
+      })),
+      canAutoResolve: true
+    });
+  }
+
+  // Parse Duplicate Apps
+  const dupApps = Array.isArray(res.data.DuplicateApps) ? res.data.DuplicateApps : (res.data.DuplicateApps ? [res.data.DuplicateApps] : []);
+  for (const da of dupApps) {
+    const procs = Array.isArray(da.Processes) ? da.Processes : (da.Processes ? [da.Processes] : []);
+    conflicts.push({
+      id: `conf_dup_${da.ProcessName}`,
+      type: 'multi_instance',
+      severity: 'warning',
+      title: `ตรวจพบ ${da.ProcessName} รันค้างซ้ำซ้อน (${da.Count} ตัว)`,
+      description: `พบโปรเซส ${da.ProcessName} เปิดทำงานค้างซ้ำซ้อนกัน ${da.Count} โปรเซส รวมกินแรม ${da.TotalMemoryMB} MB มักเกิดจากการปิดโปรแกรมไม่สมบูรณ์ ทำให้แย่งล็อกไฟล์และฐานข้อมูล`,
+      suggestedAction: `ปิดโปรเซส ${da.ProcessName} ทั้งหมดที่ค้างอยู่ แล้วเริ่มเปิดโปรแกรมใหม่อีกครั้ง`,
+      conflictingPrograms: procs.map(p => ({
+        pid: p.PID,
+        processName: p.ProcessName,
+        path: p.Path,
+        memoryMB: p.MemoryMB,
+        role: `อินสแตนซ์ที่รันค้างอยู่ (กินแรม ${p.MemoryMB} MB)`
+      })),
+      canAutoResolve: true
+    });
+  }
+
+  // Parse Blockers
+  const blockers = Array.isArray(res.data.Blockers) ? res.data.Blockers : (res.data.Blockers ? [res.data.Blockers] : []);
+  for (const blk of blockers) {
+    conflicts.push({
+      id: `conf_blk_${blk.PID}`,
+      type: 'uninstall_blocker',
+      severity: 'warning',
+      title: `โปรเซส Anti-Cheat / Background Driver ล็อกระบบ (${blk.ProcessName})`,
+      description: `โปรเซส ${blk.ProcessName} (PID ${blk.PID}) กำลังทำงานอยู่เบื้องหลังในระดับเคอร์เนล มักเป็นสาเหตุที่ทำให้ถอนการติดตั้งเกมไม่ได้ ลบไฟล์ไม่สำเร็จ หรือขัดกับโปรแกรมจำลอง`,
+      suggestedAction: `บังคับปิดโปรเซส ${blk.ProcessName} ก่อนทำการถอนการติดตั้งหรืออัปเดต`,
+      conflictingPrograms: [{
+        pid: blk.PID,
+        processName: blk.ProcessName,
+        path: blk.Path,
+        memoryMB: blk.MemoryMB,
+        role: blk.Description || 'System Driver / Hook Blocker'
+      }],
+      canAutoResolve: true
+    });
+  }
+
+  // Parse Heavy Background Hogs
+  const heavyHogs = Array.isArray(res.data.HeavyHogs) ? res.data.HeavyHogs : (res.data.HeavyHogs ? [res.data.HeavyHogs] : []);
+  for (const hog of heavyHogs) {
+    conflicts.push({
+      id: `conf_hog_${hog.PID}`,
+      type: 'resource_contention',
+      severity: 'info',
+      title: `โปรเซสเบื้องหลังกินหน่วยความจำแรมสูงผิดปกติ (${hog.ProcessName})`,
+      description: `โปรเซส ${hog.ProcessName} (PID: ${hog.PID}) ทำงานอยู่เบื้องหลังโดยไม่มีหน้าต่าง แต่กินแรมสูงถึง ${hog.MemoryMB} MB อาจทำให้โปรแกรมอื่นทำงานช้าหรือสะดุด`,
+      suggestedAction: `ตรวจสอบความจำเป็น หากไม่ได้ใช้งานสามารถปิดเพื่อคืนแรม ${hog.MemoryMB} MB ให้ระบบ`,
+      conflictingPrograms: [{
+        pid: hog.PID,
+        processName: hog.ProcessName,
+        path: hog.Path,
+        memoryMB: hog.MemoryMB,
+        role: `กินแรมสูง ${hog.MemoryMB} MB ในพื้นหลัง`
+      }],
+      canAutoResolve: true
+    });
+  }
+
+  return conflicts;
+}
+
+// 16. Resolve Conflict (Kill offending PIDs)
+async function resolveConflict(conflictId, pids = []) {
+  if (!Array.isArray(pids) || pids.length === 0) {
+    return { success: false, error: 'No PIDs provided' };
+  }
+
+  let killedCount = 0;
+  for (const pid of pids) {
+    if (pid && !isNaN(pid)) {
+      try {
+        await killProcess(pid);
+        killedCount++;
+      } catch (e) {}
+    }
+  }
+
+  return { success: true, killedCount };
+}
+
 module.exports = {
   getSystemDrives,
   getSystemTelemetry,
@@ -880,5 +1374,9 @@ module.exports = {
   scanLargeFiles,
   getStartupApps,
   openWindowsAddRemove,
-  openInstallFolder
+  openInstallFolder,
+  uninstallSelf,
+  getAllBackgroundProcesses,
+  detectProgramConflicts,
+  resolveConflict
 };

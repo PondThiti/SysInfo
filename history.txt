@@ -71,3 +71,28 @@ Update (2026-10-24): Light Theme Toggle & Dynamic Font Size Settings
    - ระบบปรับขนาด Font Size อัตโนมัติทั่วทั้งโปรแกรมแบบ Real-time (HTML root rem scaling & pixel overrides)
    - มีกล่องแสดงตัวอย่างข้อความสด (Live Font Size Preview) ให้เห็นผลลัพธ์ทันทีขณะกดเลือก
    - บันทึกการตั้งค่าลง LocalStorage (`syspulse_font_size`) จำค่าไว้เสมอเมื่อเปิดแอปใหม่
+
+
+================================================================================
+Update (2026-10-24): Fix Uninstallation (No Restart Required & Fix Uninstaller Run)
+================================================================================
+1. แก้ไขปัญหาถอนการติดตั้งแล้วระบบแจ้งเตือน/บังคับ Restart (No Reboot Required):
+   - เพิ่มการตัดการทำงานของโปรเซส: WiX CustomAction (`KillRunningApp`) และ NSIS macro (`customUnInstall`) จะสั่งปิดโปรเซส "System Storage & Port Inspector.exe" และเบื้องหลังทั้งหมดก่อนเริ่มการลบไฟล์ทันที ทำให้ไม่มีไฟล์ใดถูกล็อกค้าง (In Use)
+   - ปิดกั้นการบังคับรีสตาร์ทของ Windows Installer อย่างเด็ดขาด:
+     * กำหนด `<Property Id="REBOOT" Value="ReallySuppress" />` ใน WiX Product.wxs
+     * กำหนด `<Property Id="MSIRESTARTMANAGERCONTROL" Value="Disable" />` เพื่อไม่ให้ Restart Manager ของ Windows ทริกเกอร์ Restart
+     * ผูกพารามิเตอร์ `REBOOT=ReallySuppress` เข้ากับ Start Menu Shortcut และสคริปต์ถอนการติดตั้งทุกตัว
+
+2. แก้ไขปัญหารันถอนการติดตั้งไม่ได้ (Fix Uninstaller Run Failure):
+   - แก้ไขไฟล์ `uninstall.bat`:
+     * เปลี่ยนจากการฮาร์ดโค้ด UpgradeCode (ซึ่ง msiexec /x ปฏิเสธ) เป็นการค้นหา ProductCode และ UninstallString จาก Registry แบบ Dynamic อัตโนมัติ รองรับทั้งการติดตั้งแบบ MSI และ NSIS (.exe)
+     * รองรับการยกระดับสิทธิ์ Administrator (Auto-Elevation RunAs) อัตโนมัติ ป้องกันปัญหา Permission Denied
+   - เพิ่มฟังก์ชัน 1-Click Uninstall ภายในตัวโปรแกรม:
+     * เพิ่มปุ่ม "ถอนการติดตั้งโปรแกรมทันที (1-Click Uninstall)" ในหน้า Settings พร้อม Modal แจ้งเตือนและยืนยัน
+     * มีระบบเบื้องหลัง (Detached Helper) สั่งปิดแอป ปิดโปรเซส และรันคำสั่งถอนการติดตั้งอย่างสมบูรณ์แบบโดยไม่ต้องเปิดหาไฟล์เอง
+
+3. อัปเดตและคอมไพล์ชุดติดตั้งเวอร์ชัน 0.0.3 ใหม่ทั้งหมด:
+   - บิลด์ไฟล์ตัวติดตั้ง Windows MSI Installer (`SystemStoragePortInspector_Setup.msi`)
+   - บิลด์ไฟล์ตัวติดตั้ง Windows NSIS Setup (`System Storage & Port Inspector Setup.exe`)
+   - บิลด์ไฟล์ Windows Portable Archive (`System Storage & Port Inspector-win.zip`)
+   - ส่งออกไฟล์ไปยังโฟลเดอร์: `C:\Users\zeroy\Desktop\MyProject\Apps\PC-App\`

@@ -21,5 +21,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   scanLargeFiles: (drive, minSizeMB, depth) => ipcRenderer.invoke('scan-large-files', drive, minSizeMB, depth),
   getStartupApps: () => ipcRenderer.invoke('get-startup-apps'),
   openWindowsAddRemove: () => ipcRenderer.invoke('open-windows-add-remove'),
-  openInstallFolder: () => ipcRenderer.invoke('open-install-folder')
+  openInstallFolder: () => ipcRenderer.invoke('open-install-folder'),
+  uninstallSelf: () => ipcRenderer.invoke('uninstall-self'),
+  getAllBackgroundProcesses: () => ipcRenderer.invoke('get-all-background-processes'),
+  detectProgramConflicts: () => ipcRenderer.invoke('detect-program-conflicts'),
+  resolveConflict: (conflictId, pids) => ipcRenderer.invoke('resolve-conflict', conflictId, pids)
 });
