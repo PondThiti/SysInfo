@@ -2,7 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom Scrollbar */
+/* ==========================================================================
+   FONT SIZE SCALING OPTIONS
+   Tailwind rem-based units automatically scale relative to root font-size
+   ========================================================================== */
+html.font-size-small {
+  font-size: 14px !important;
+}
+
+html.font-size-normal {
+  font-size: 16px !important;
+}
+
+html.font-size-large {
+  font-size: 18px !important;
+}
+
+html.font-size-xl {
+  font-size: 20px !important;
+}
+
+/* Explicit pixel overrides for fine-tuned scaling */
+html.font-size-small .text-\[10px\] { font-size: 9px !important; }
+html.font-size-small .text-\[11px\] { font-size: 10px !important; }
+
+html.font-size-large .text-\[10px\] { font-size: 11.5px !important; }
+html.font-size-large .text-\[11px\] { font-size: 12.5px !important; }
+
+html.font-size-xl .text-\[10px\] { font-size: 13px !important; }
+html.font-size-xl .text-\[11px\] { font-size: 14px !important; }
+
+/* Custom Scrollbar - Dark Theme (Default) */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -25,4 +55,282 @@
 
 .no-drag {
   -webkit-app-region: no-drag;
+}
+
+/* ==========================================================================
+   LIGHT THEME OVERRIDES (.theme-light)
+   High-contrast, clean white surfaces with refined gray borders and text
+   ========================================================================== */
+html.theme-light,
+.theme-light {
+  color-scheme: light;
+}
+
+/* Base backgrounds & surfaces */
+.theme-light body,
+.theme-light #root,
+.theme-light.bg-slate-950,
+.theme-light .bg-slate-950 {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+.theme-light header {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+.theme-light aside {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Card panels, containers & surfaces */
+.theme-light .bg-slate-900\/95,
+.theme-light .bg-slate-900\/90,
+.theme-light .bg-slate-900\/80,
+.theme-light .bg-slate-900\/70,
+.theme-light .bg-slate-900\/60,
+.theme-light .bg-slate-900,
+.theme-light .bg-slate-950\/60,
+.theme-light .bg-slate-950\/70,
+.theme-light .bg-slate-950\/80,
+.theme-light .bg-slate-950\/90 {
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+}
+
+.theme-light .bg-gradient-to-r {
+  background-image: none !important;
+  background-color: #ffffff !important;
+}
+
+/* Borders */
+.theme-light .border-slate-800,
+.theme-light .border-slate-800\/80,
+.theme-light .border-slate-800\/60,
+.theme-light .border-slate-800\/50,
+.theme-light .border-slate-800\/40,
+.theme-light .divide-slate-800 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e2e8f0 !important;
+}
+
+.theme-light .border-slate-700,
+.theme-light .border-slate-700\/60 {
+  border-color: #cbd5e1 !important;
+}
+
+/* Neutral text typography */
+.theme-light .text-white:not(.keep-white):not([class*="bg-indigo-"]):not([class*="bg-emerald-"]):not([class*="bg-rose-"]):not([class*="bg-amber-"]):not([class*="bg-violet-"]):not([class*="bg-red-"]):not([class*="bg-sky-"]) {
+  color: #0f172a !important;
+}
+
+.theme-light .text-slate-100 {
+  color: #0f172a !important;
+}
+
+.theme-light .text-slate-200 {
+  color: #1e293b !important;
+}
+
+.theme-light .text-slate-300 {
+  color: #334155 !important;
+}
+
+.theme-light .text-slate-400 {
+  color: #64748b !important;
+}
+
+.theme-light .text-slate-500 {
+  color: #64748b !important;
+}
+
+/* Hover effects */
+.theme-light .hover\:bg-slate-800\/70:hover,
+.theme-light .hover\:bg-slate-800\/60:hover,
+.theme-light .hover\:bg-slate-800\/50:hover,
+.theme-light .hover\:bg-slate-800\/40:hover,
+.theme-light .hover\:bg-slate-800\/30:hover,
+.theme-light .hover\:bg-slate-800\/20:hover,
+.theme-light .hover\:bg-slate-900\/50:hover,
+.theme-light .hover\:bg-slate-900\/40:hover {
+  background-color: #f1f5f9 !important;
+}
+
+.theme-light .hover\:bg-slate-800:hover {
+  background-color: #e2e8f0 !important;
+}
+
+.theme-light .hover\:bg-slate-700:hover {
+  background-color: #cbd5e1 !important;
+}
+
+.theme-light .hover\:text-white:hover {
+  color: #0f172a !important;
+}
+
+/* Secondary neutral buttons & list tags */
+.theme-light .bg-slate-800:not([class*="peer-checked"]):not(.keep-bg) {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+  border-color: #cbd5e1 !important;
+}
+
+.theme-light .bg-slate-800\/80 {
+  background-color: #f8fafc !important;
+  color: #334155 !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Table header & rows */
+.theme-light thead tr,
+.theme-light tr.bg-slate-950\/60,
+.theme-light tr.bg-slate-950\/70 {
+  background-color: #f8fafc !important;
+  color: #475569 !important;
+  border-color: #e2e8f0 !important;
+}
+
+.theme-light th {
+  color: #475569 !important;
+}
+
+.theme-light tbody tr {
+  border-color: #e2e8f0 !important;
+}
+
+.theme-light tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+/* Form inputs & select dropdowns */
+.theme-light input[type="text"],
+.theme-light input[type="number"],
+.theme-light select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+.theme-light input::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Solid accent buttons and badges must retain white text */
+.theme-light .bg-indigo-600,
+.theme-light .bg-emerald-600,
+.theme-light .bg-rose-600,
+.theme-light .bg-amber-600,
+.theme-light .bg-violet-600,
+.theme-light .bg-sky-600,
+.theme-light .keep-white {
+  color: #ffffff !important;
+}
+
+.theme-light .bg-indigo-600 *,
+.theme-light .bg-emerald-600 *,
+.theme-light .bg-rose-600 *,
+.theme-light .bg-amber-600 *,
+.theme-light .bg-violet-600 *,
+.theme-light .bg-sky-600 *,
+.theme-light .keep-white * {
+  color: #ffffff !important;
+}
+
+/* Preserving colored badges in Light Mode */
+.theme-light .bg-indigo-500\/15,
+.theme-light .bg-indigo-500\/10 {
+  background-color: rgba(99, 102, 241, 0.12) !important;
+}
+.theme-light .text-indigo-300,
+.theme-light .text-indigo-400 {
+  color: #4f46e5 !important;
+}
+.theme-light .border-indigo-500\/30,
+.theme-light .border-indigo-500\/20 {
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+.theme-light .bg-emerald-500\/10,
+.theme-light .bg-emerald-500\/15,
+.theme-light .bg-emerald-500\/20 {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+}
+.theme-light .text-emerald-300,
+.theme-light .text-emerald-400 {
+  color: #059669 !important;
+}
+.theme-light .border-emerald-500\/30,
+.theme-light .border-emerald-500\/20 {
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+.theme-light .bg-amber-500\/10,
+.theme-light .bg-amber-500\/15,
+.theme-light .bg-amber-500\/20 {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+}
+.theme-light .text-amber-300,
+.theme-light .text-amber-400 {
+  color: #d97706 !important;
+}
+.theme-light .border-amber-500\/30,
+.theme-light .border-amber-500\/20 {
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+.theme-light .bg-rose-500\/10,
+.theme-light .bg-rose-500\/15,
+.theme-light .bg-rose-500\/20 {
+  background-color: rgba(244, 63, 94, 0.12) !important;
+}
+.theme-light .text-rose-300,
+.theme-light .text-rose-400 {
+  color: #e11d48 !important;
+}
+.theme-light .border-rose-500\/30,
+.theme-light .border-rose-500\/20 {
+  border-color: rgba(244, 63, 94, 0.3) !important;
+}
+
+.theme-light .text-sky-400 {
+  color: #0284c7 !important;
+}
+
+/* Toast notifications in Light Mode */
+.theme-light .bg-emerald-950\/90 {
+  background-color: #ecfdf5 !important;
+  color: #065f46 !important;
+  border-color: #a7f3d0 !important;
+}
+.theme-light .bg-rose-950\/90 {
+  background-color: #fff1f2 !important;
+  color: #9f1239 !important;
+  border-color: #fecdd3 !important;
+}
+.theme-light .bg-amber-950\/90 {
+  background-color: #fffbeb !important;
+  color: #92400e !important;
+  border-color: #fde68a !important;
+}
+
+/* Bottom dock IPC Console (keep sleek dark developer terminal look) */
+.theme-light .bg-slate-950\/95.border-t {
+  background-color: #090d16 !important;
+  border-color: #1e293b !important;
+  color: #f8fafc !important;
+}
+.theme-light .bg-slate-950\/95.border-t span.text-white {
+  color: #ffffff !important;
+}
+
+/* Light Mode Custom Scrollbar */
+.theme-light ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.theme-light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

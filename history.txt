@@ -49,3 +49,25 @@ Update (2026-10-24): Icon Integration, Multi-Platform Packaging & Git Setup
 3. Git & Repository:
    - สร้าง `.gitignore` เพื่อแยก binaries และ dependencies
    - เตรียมชุด Commit และพร้อม Push ขึ้น Remote `https://github.com/PondThiti/SysPulse.git`
+
+================================================================================
+Update (2026-10-24): Light Theme Toggle & Dynamic Font Size Settings
+================================================================================
+1. ระบบสลับธีมสีขาว / สีมืด (Light & Dark Theme Switcher):
+   - เพิ่มปุ่ม Quick Toggle สลับธีม 1-Click บนแถบหัวโปรแกรม (Header Bar) ด้านบนขวา (☀️ ธีมสีขาว / 🌙 ธีมมืด)
+   - เพิ่มการเลือกโหมดในหน้า การตั้งค่าระบบ (Settings Tab) พร้อมการ์ดภาพแสดงตัวอย่างและคำอธิบาย
+   - ธีมสีขาว (Light Theme) ได้รับการออกแบบให้สะอาด สว่าง คมชัด มี Contrast สูง สบายตา ไม่กลืนสี
+   - ปรับแต่งสีพื้นหลัง (#ffffff, #f8fafc), เส้นขอบ (#e2e8f0, #cbd5e1), สีข้อความ (#0f172a, #334155, #64748b)
+   - ปรับ Scrollbar และตารางข้อมูลให้เข้ากับโหมดสีขาว และคงสีตัวหนังสือสีขาวบนปุ่ม Action หลัก (Primary Buttons)
+   - บันทึกสถานะธีมลง LocalStorage (`syspulse_theme`) ให้อัตโนมัติ
+
+2. ระบบตั้งค่าขนาดตัวหนังสือ (Font Size Adjustment):
+   - เพิ่มการตั้งค่าขนาดตัวอักษรในหน้า การตั้งค่าระบบ (Settings > Appearance & Typography)
+   - มี 4 ระดับให้เลือก:
+     * เล็ก (Small - 14px): กะทัดรัด จุข้อมูลได้เยอะ
+     * ปกติ (Normal - 16px): ค่ามาตรฐาน สมดุลและคมชัด
+     * ใหญ่ (Large - 18px): ตัวหนังสือใหญ่ อ่านง่าย สบายตา ไม่ต้องเพ่ง
+     * ใหญ่พิเศษ (Extra Large - 20px): ตัวใหญ่ ชัดเจน มองเห็นได้ชัดจากระยะไกล
+   - ระบบปรับขนาด Font Size อัตโนมัติทั่วทั้งโปรแกรมแบบ Real-time (HTML root rem scaling & pixel overrides)
+   - มีกล่องแสดงตัวอย่างข้อความสด (Live Font Size Preview) ให้เห็นผลลัพธ์ทันทีขณะกดเลือก
+   - บันทึกการตั้งค่าลง LocalStorage (`syspulse_font_size`) จำค่าไว้เสมอเมื่อเปิดแอปใหม่

@@ -33,7 +33,10 @@ import {
   StopCircle,
   PlayCircle,
   Unlock,
-  Play
+  Play,
+  Sun,
+  Moon,
+  Type
 } from 'lucide-react';
 
 // Format size helper (MB to MB/GB)
@@ -109,10 +112,39 @@ export default function App() {
   const [totalCleanedSessionMB, setTotalCleanedSessionMB] = useState(0);
 
   // Settings
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('syspulse_theme') as 'dark' | 'light') || 'dark';
+  });
+  const [fontSize, setFontSize] = useState<'small' | 'normal' | 'large' | 'xl'>(() => {
+    return (localStorage.getItem('syspulse_font_size') as 'small' | 'normal' | 'large' | 'xl') || 'normal';
+  });
   const [telemetryInterval, setTelemetryInterval] = useState(2500);
   const [minHeavyFileSizeMB, setMinHeavyFileSizeMB] = useState(25);
   const [scanDepth, setScanDepth] = useState(4);
   const [autoResolveServices, setAutoResolveServices] = useState(true);
+
+  // Sync Theme & Font Size with HTML document root & LocalStorage
+  useEffect(() => {
+    localStorage.setItem('syspulse_theme', theme);
+    if (theme === 'light') {
+      document.documentElement.classList.add('theme-light');
+      document.documentElement.classList.remove('theme-dark');
+    } else {
+      document.documentElement.classList.add('theme-dark');
+      document.documentElement.classList.remove('theme-light');
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem('syspulse_font_size', fontSize);
+    document.documentElement.classList.remove(
+      'font-size-small',
+      'font-size-normal',
+      'font-size-large',
+      'font-size-xl'
+    );
+    document.documentElement.classList.add(`font-size-${fontSize}`);
+  }, [fontSize]);
 
   // IPC Console & Toast Notifications
   const [showIpcConsole, setShowIpcConsole] = useState(false);
@@ -468,7 +500,7 @@ export default function App() {
   }, [junkCategories]);
 
   return (
-    <div className="h-screen w-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white overflow-hidden select-none">
+    <div className={`h-screen w-screen ${theme === 'light' ? 'theme-light bg-slate-50 text-slate-900' : 'theme-dark bg-slate-950 text-slate-100'} flex flex-col font-sans selection:bg-indigo-500 selection:text-white overflow-hidden select-none`}>
       {/* =====================================================================
           CUSTOM FIXED TOP HEADER
       ===================================================================== */}
@@ -496,6 +528,29 @@ export default function App() {
               <span>ได้พื้นที่คืน: {formatSize(totalCleanedSessionMB)}</span>
             </div>
           )}
+
+          {/* Quick Theme Switch Toggle */}
+          <button
+            onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+            className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border transition ${
+              theme === 'light'
+                ? 'bg-amber-100/90 text-amber-900 border-amber-300 hover:bg-amber-200 shadow-sm'
+                : 'bg-slate-800/80 text-slate-200 border-slate-700 hover:bg-slate-700 hover:text-white'
+            }`}
+            title={theme === 'dark' ? 'สลับเป็นธีมสีขาว (Switch to Light Theme)' : 'สลับเป็นธีมมืด (Switch to Dark Theme)'}
+          >
+            {theme === 'dark' ? (
+              <>
+                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">ธีมสีขาว</span>
+              </>
+            ) : (
+              <>
+                <Moon className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="hidden sm:inline">ธีมมืด</span>
+              </>
+            )}
+          </button>
 
           <button
             onClick={() => setShowIpcConsole(!showIpcConsole)}
@@ -2137,8 +2192,152 @@ export default function App() {
               <div>
                 <h1 className="text-xl md:text-2xl font-bold text-white">การตั้งค่าระบบ (Settings & Preferences)</h1>
                 <p className="text-sm text-slate-400">
-                  ปรับแต่งพารามิเตอร์การทำงาน และข้อมูลการจัดการถอนการติดตั้งโปรแกรม
+                  ปรับแต่งพารามิเตอร์การทำงาน โทนสี ขนาดตัวหนังสือ และข้อมูลการจัดการถอนการติดตั้งโปรแกรม
                 </p>
+              </div>
+
+              {/* Setting 0: Appearance, Theme & Font Size */}
+              <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-5">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center">
+                      <Sun className="w-4 h-4 text-indigo-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white">
+                        การแสดงผลและธีม (Appearance & Typography)
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        ปรับแต่งโทนสีหน้าจอ และขนาดตัวหนังสือให้เหมาะกับสายตาและขนาดจอแสดงผล
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Theme Selection */}
+                <div className="space-y-3">
+                  <div className="text-xs font-semibold text-slate-200 flex items-center justify-between">
+                    <span>ธีมสีของแอปพลิเคชัน (Color Theme)</span>
+                    <span className="text-[11px] text-slate-400">สามารถกดปุ่มสลับบนหัวโปรแกรมได้เช่นกัน</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Dark Theme Card */}
+                    <button
+                      type="button"
+                      onClick={() => setTheme('dark')}
+                      className={`flex items-start gap-3.5 p-3.5 rounded-xl border text-left transition-all ${
+                        theme === 'dark'
+                          ? 'bg-indigo-600/10 border-indigo-500 ring-2 ring-indigo-500/30 shadow-md'
+                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className={`p-2.5 rounded-xl shrink-0 ${theme === 'dark' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                        <Moon className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-sm text-white">โหมดมืด (Dark Theme)</span>
+                          {theme === 'dark' && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30 flex items-center gap-1">
+                              <Check className="w-3 h-3" /> ใช้งานอยู่
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                          โทนสีมืด สบายตา ถนอมสายตา เหมาะสำหรับห้องแสงน้อยและการใช้งานต่อเนื่อง
+                        </p>
+                      </div>
+                    </button>
+
+                    {/* Light Theme Card */}
+                    <button
+                      type="button"
+                      onClick={() => setTheme('light')}
+                      className={`flex items-start gap-3.5 p-3.5 rounded-xl border text-left transition-all ${
+                        theme === 'light'
+                          ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/30 shadow-md'
+                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className={`p-2.5 rounded-xl shrink-0 ${theme === 'light' ? 'bg-amber-500 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                        <Sun className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-sm text-white">โหมดสีขาว (Light Theme)</span>
+                          {theme === 'light' && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500 font-semibold border border-amber-500/30 flex items-center gap-1">
+                              <Check className="w-3 h-3" /> ใช้งานอยู่
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                          โทนสีขาวสว่าง ชัดเจน คมชัด มองเห็นข้อมูลได้ง่ายแม้ในที่แสงสว่างจ้า
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Font Size Configuration */}
+                <div className="space-y-3 pt-3 border-t border-slate-800/80">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                      <Type className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>ขนาดตัวหนังสือ (Font Size)</span>
+                    </div>
+                    <span className="text-xs text-indigo-400 font-mono font-medium">
+                      {fontSize === 'small' && 'เล็ก (Small - 14px)'}
+                      {fontSize === 'normal' && 'ปกติ / ปานกลาง (Normal - 16px)'}
+                      {fontSize === 'large' && 'ใหญ่ (Large - 18px)'}
+                      {fontSize === 'xl' && 'ใหญ่พิเศษ (Extra Large - 20px)'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {[
+                      { id: 'small', label: 'เล็ก (14px)', desc: 'กะทัดรัด จุข้อมูลเยอะ' },
+                      { id: 'normal', label: 'ปกติ (16px)', desc: 'มาตรฐาน แนะนำ' },
+                      { id: 'large', label: 'ใหญ่ (18px)', desc: 'อ่านสบาย ไม่ต้องเพ่ง' },
+                      { id: 'xl', label: 'ใหญ่พิเศษ (20px)', desc: 'ตัวใหญ่ ชัดเจนสุด' }
+                    ].map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setFontSize(opt.id as any)}
+                        className={`px-3.5 py-2.5 rounded-xl border text-left transition-all ${
+                          fontSize === opt.id
+                            ? 'bg-indigo-600 text-white border-indigo-500 shadow-md ring-2 ring-indigo-500/20'
+                            : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
+                        }`}
+                      >
+                        <div className="font-bold text-xs flex items-center justify-between">
+                          <span>{opt.label}</span>
+                          {fontSize === opt.id && <Check className="w-3.5 h-3.5" />}
+                        </div>
+                        <div className={`text-[10px] mt-0.5 ${fontSize === opt.id ? 'text-indigo-100' : 'text-slate-500'}`}>
+                          {opt.desc}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Live Preview Card */}
+                  <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-1.5">
+                    <div className="text-[11px] font-semibold text-slate-400 flex items-center justify-between">
+                      <span>ตัวอย่างการแสดงผลแบบสด (Live Font Preview):</span>
+                      <span className="text-indigo-400 font-medium">เปลี่ยนขนาดทันทีทั่วทั้งโปรแกรม</span>
+                    </div>
+                    <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 text-slate-200">
+                      <p className="font-medium">
+                        SysPulse System Inspector: ตรวจสอบพอร์ตเชื่อมต่อ 127.0.0.1:8080 (PID 4920) ใช้งาน RAM 2.45 GB
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        The quick brown fox jumps over the lazy dog. 0123456789 (พร้อมรองรับการแสดงผลทุกระดับสายตา)
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Setting 1: General Preferences */}
