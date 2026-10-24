@@ -1,6 +1,6 @@
 {
   "name": "syspulse-system-inspector",
-  "version": "1.0.0",
+  "version": "0.0.2",
   "description": "System Storage & Port Inspector - Desktop Utility for Windows",
   "main": "electron/main.cjs",
   "scripts": {
