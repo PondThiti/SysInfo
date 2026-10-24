@@ -1,0 +1,22 @@
+[package]
+name = "sysinfo-backend"
+version = "0.10.3"
+description = "SysInfo Rust Backend Core - File Organizer & System Inspector"
+edition = "2021"
+
+[lib]
+name = "sysinfo_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.38", features = ["full"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+sha2 = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1.10"
+uuid = { version = "1.8", features = ["v4", "serde"] }
+walkdir = "2.5"
+thiserror = "1.0"
+trash = "5.1"

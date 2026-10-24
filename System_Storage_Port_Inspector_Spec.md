@@ -920,6 +920,19 @@ system-storage-port-inspector/
 
 ตัวอย่างนี้เป็นรูปแบบประกอบการออกแบบเท่านั้น ชนิดข้อมูลจริงควรนิยามร่วมกันใน Rust DTO และ TypeScript type เพื่อป้องกัน Frontend/Backend ไม่ตรงกัน
 
+### 10.6 File Organizer (v0.10.3)
+
+| Command | หน้าที่ | หมายเหตุ |
+|---|---|---|
+| `list_organizer_rules` | ดึงรายการกฎทั้งหมด (ทั้งพรีเซ็ตในตัวและที่ผู้ใช้สร้าง) | เรียงลำดับตาม priority |
+| `save_organizer_rule` | สร้างหรือแก้ไขกฎการจัดระเบียบ | บันทึกลงตาราง SQLite `organizer_rules` |
+| `preview_organize` | สแกนและสร้างรายการตัวอย่าง (Dry-Run Preview) | ตรวจจับ Conflict, เปรียบเทียบ Hash, ไม่แตะต้องไฟล์จริง |
+| `apply_organize` | ดำเนินการย้ายไฟล์ตามชุดที่เลือกจริง | รองรับย้ายข้ามไดรฟ์ (Copy → Verify → Delete) พร้อมบันทึก Undo Journal |
+| `undo_organize` | ย้อนกลับไฟล์ทั้งชุด (Batch) คืนสู่พาธต้นทางเดิม | ตรวจสอบไฟล์ปลายทาง, คืนค่า metadata mtime |
+| `get_organize_history` | ดึงประวัติการจัดระเบียบไฟล์และ Journal | ตรวจสอบสถานะการย้อนกลับของแต่ละ batch |
+| `clean_empty_folders` | ค้นหาและล้างโฟลเดอร์ว่างเปล่าที่หลงเหลือหลังการย้าย | ตรวจสอบ subdirectories จากชั้นในสุดออกมา |
+| `check_watch_folder` | ตรวจสอบโฟลเดอร์เฝ้าระวังเพื่อแนะนำการจัดระเบียบ | ทำงานในโหมดคำแนะนำเท่านั้น ไม่ย้ายไฟล์อัตโนมัติ |
+
 ---
 
 ## 11. แบบจำลองข้อมูล
@@ -995,9 +1008,78 @@ system-storage-port-inspector/
 | `is_excluded` | อยู่ในรายการยกเว้นหรือไม่ |
 | `is_selected` | สถานะการเลือกใน UI ซึ่งไม่ใช่การยืนยันลบ |
 
+### 11.6 OrganizeRule
+
+| ฟิลด์ | คำอธิบาย |
+|---|---|
+| `id` | รหัสกฎ (เช่น `preset_by_type` หรือ UUID) |
+| `name` | ชื่อกฎที่แสดงผลใน UI |
+| `description` | คำอธิบายวัตถุประสงค์และเงื่อนไขของกฎ |
+| `is_preset` | เป็นพรีเซ็ตมาตรฐานในตัวหรือไม่ (true/false) |
+| `is_enabled` | สถานะเปิดใช้งานกฎ |
+| `priority` | ลำดับความสำคัญในการจับคู่กฎ (น้อยไปมาก) |
+| `conditions` | รายการเงื่อนไข (Extension, NamePattern, FileSize, FileAge, Category, SourceFolder) |
+| `target_template` | Template โฟลเดอร์ปลายทาง เช่น `{type}/{year}/{month}` |
+| `conflict_strategy` | กลยุทธ์เมื่อชื่อซ้ำ (`skip`, `auto_rename`, `overwrite`, `recycle_duplicate_if_identical`) |
+
+### 11.7 OrganizePlanItem
+
+| ฟิลด์ | คำอธิบาย |
+|---|---|
+| `id` | รหัสไอเทมจำลองในพรีวิว |
+| `source_path` | พาธไฟล์ต้นทางแบบเต็ม |
+| `target_path` | พาธปลายทางที่คำนวณได้จาก Template และ Rule |
+| `file_name` | ชื่อไฟล์พร้อมนามสกุล |
+| `extension` | นามสกุลไฟล์ |
+| `size_bytes` | ขนาดไฟล์จริง (Bytes) |
+| `formatted_size` | ขนาดไฟล์แบบจัดรูปแบบ (MB/GB) |
+| `modified_at` | วันเวลาที่แก้ไขล่าสุดของไฟล์ |
+| `matched_rule_id` | รหัสกฎที่จับคู่สำเร็จ |
+| `matched_rule_name` | ชื่อกฎที่จับคู่สำเร็จ |
+| `conflict_type` | ประเภทข้อขัดแย้ง (`none`, `name_collision`, `identical_duplicate`) |
+| `suggested_action` | ทางเลือกการดำเนินการที่แนะนำสำหรับไฟล์นี้ |
+| `is_cross_drive` | เป็นการย้ายข้ามไดรฟ์ต่างกันหรือไม่ (true/false) |
+| `is_selected` | ถูกเลือกสำหรับดำเนินการย้ายจริงหรือไม่ |
+
+### 11.8 OrganizeBatch
+
+| ฟิลด์ | คำอธิบาย |
+|---|---|
+| `batch_id` | รหัสชุดงานเฉพาะเจาะจง |
+| `rule_id` | กฎที่ใช้ในชุดงานนี้ |
+| `rule_name` | ชื่อกฎ |
+| `source_directory` | โฟลเดอร์ต้นทาง |
+| `target_base_directory` | โฟลเดอร์ปลายทางหลัก |
+| `total_files` | จำนวนไฟล์ที่ย้ายสำเร็จในชุดนี้ |
+| `total_bytes` | ขนาดข้อมูลรวมที่ย้ายสำเร็จ |
+| `records` | รายการ `MoveRecord` ของทุกไฟล์ในชุด |
+| `created_at` | วันเวลาที่ดำเนินการ |
+| `is_undone` | สถานะการย้อนกลับของชุดงานนี้ |
+| `undone_at` | วันเวลาที่ถูกย้อนกลับ (หากมี) |
+
+### 11.9 MoveRecord
+
+| ฟิลด์ | คำอธิบาย |
+|---|---|
+| `id` | รหัสบันทึกการย้ายรายไฟล์ |
+| `batch_id` | รหัสชุดงานที่เชื่อมโยง |
+| `source_path` | ตำแหน่งต้นทางเดิม |
+| `destination_path` | ตำแหน่งปลายทางใหม่ที่ย้ายไป |
+| `file_size` | ขนาดไฟล์ (Bytes) |
+| `source_mtime_ms` | วันเวลา mtime เดิมก่อนย้าย (ใช้คืนค่า timestamp ตอน Undo) |
+| `source_hash` | SHA-256 Hash สำหรับยืนยันความถูกต้องสมบูรณ์ |
+| `is_cross_drive` | สถานะการย้ายข้ามไดรฟ์ |
+| `moved_at` | เวลาที่ย้ายไฟล์ |
+| `status` | สถานะ (`moved`, `restored`, `failed`) |
+
 ---
 
 ## 12. ความปลอดภัยและการป้องกันข้อมูลเสียหาย
+
+### ตารางฐานข้อมูล SQLite ภายในสำหรับ File Organizer:
+- **`organizer_rules`**: จัดเก็บกฎการจัดระเบียบและพรีเซ็ต
+- **`organize_batches`**: จัดเก็บบันทึกประวัติชุดการจัดระเบียบไฟล์
+- **`move_records`**: จัดเก็บบันทึก Undo Journal ของทุกไฟล์ในแต่ละชุดเพื่อรองรับการย้อนกลับ 100%
 
 เพราะแอปสามารถเปลี่ยนแปลงไฟล์และยุติโปรเซสได้ ความปลอดภัยต้องเป็นส่วนหนึ่งของโครงสร้างหลัก ไม่ใช่เพิ่มทีหลัง
 
@@ -1153,6 +1235,12 @@ system-storage-port-inspector/
 - ยืนยันว่าไม่มีการเปลี่ยนจาก Recycle Bin เป็นลบถาวรโดยอัตโนมัติ
 - ทดสอบว่า Process termination ต้องผ่านการยืนยันและตรวจ PID ซ้ำ
 - ทดสอบกรณีสิทธิ์ไม่พอโดยไม่ยกระดับสิทธิ์เอง
+- **File Organizer Safety Tests:**
+  * **ทดสอบย้ายข้ามไดรฟ์ (Cross-drive move):** ตรวจสอบว่าระบบใช้ Copy → Verify (Size & SHA-256 Hash) → Delete Source และหากเกิดข้อผิดพลาดกลางทาง ไฟล์ต้นทางจะไม่สูญหายเด็ดขาด
+  * **ทดสอบไฟล์ถูกล็อกหรือเปลี่ยนแปลงหลัง Preview:** มีการตรวจซ้ำก่อนย้าย (PathChanged, InUse)
+  * **ทดสอบขอบเขต Path ห้ามแตะต้อง:** ห้ามกฎย้ายเข้า/ออกจากโฟลเดอร์ระบบ (`C:\Windows`, `C:\Program Files`) และห้ามจัดโฟลเดอร์โปรเจกต์ที่มี marker (`.git`, `package.json`, `Cargo.toml`) แบบแยกไฟล์ออกจากกัน
+  * **ทดสอบการย้อนกลับหลังไฟล์ปลายทางถูกแก้ (Undo Safety):** ตรวจสอบการเปลี่ยนแปลงก่อน Undo
+  * **ทดสอบ Path ยาวและอักขระพิเศษ:** รองรับพาธยาวเกิน 260 ตัวอักษรบน Windows (`\\?\`) และชื่อที่ห้ามใช้ เช่น `CON`, `PRN`, `AUX`, `NUL`
 
 ### 15.4 เกณฑ์ยอมรับรุ่นแรก (MVP Acceptance Criteria)
 
@@ -1168,6 +1256,10 @@ system-storage-port-inspector/
 - การยุติโปรเซสมีการยืนยันและรายงานผลลัพธ์
 - Exclusion List ถูกใช้ในทุก workflow ที่เกี่ยวข้อง
 - มี Activity Log และสามารถล้างประวัติได้
+- **File Organizer Acceptance Criteria:**
+  * ทุก batch ต้องมีขั้นตอน **Dry-run Preview** ให้ผู้ใช้ตรวจสอบและเลือก/ยกเว้นรายไฟล์ก่อนทำจริง
+  * ทุกการย้ายต้องบันทึกลง **Undo Journal** และสามารถกด "ย้อนกลับ" ทั้ง batch คืนสู่ตำแหน่งเดิมได้ 100% พร้อมคงค่า metadata วันที่แก้ไข (`mtime`)
+  * **ไม่เขียนทับไฟล์เดิมเงียบ ๆ:** เมื่อมีชื่อซ้ำ ต้องมีตัวเลือก ข้าม / เปลี่ยนชื่ออัตโนมัติ (`file (1).ext`) / และตรวจ Hash สำเนาซ้ำเป๊ะเพื่อเสนอส่งสำเนาไป Recycle Bin
 
 ---
 
@@ -1211,6 +1303,18 @@ system-storage-port-inspector/
 - เพิ่มกฎ Exclusion และทดสอบ Path safety
 
 **ผลลัพธ์:** ตรวจรายการที่อาจลบได้และคืนพื้นที่ด้วยการยืนยันของผู้ใช้
+
+### Phase 4.5 — File Organizer (ระบบจัดระเบียบไฟล์และ Undo Journal)
+
+- สร้าง Rule Engine และ Presets ในตัว (ตามประเภทไฟล์, ตามวันที่, Downloads, Dev/Game)
+- สร้างระบบ Dry-Run Preview Table พร้อมจำแนกประเภท Conflict และการคำนวณ Hash ซ้ำ
+- สร้าง Move Service พร้อมระบบย้ายข้ามไดรฟ์ปลอดภัย (Copy → Verify Hash → Delete Source) และคงค่า mtime
+- สร้างระบบ Undo Journal และ Batch History สำหรับการย้อนกลับได้สมบูรณ์แบบ 100%
+- สร้าง Bulk Rename พร้อมตัวแปร `{name}`, `{date}`, `{counter}`
+- สร้างระบบ Empty Folder Cleanup หลังการจัดระเบียบ
+- สร้าง Watch Folder ในโหมดแนะนำ (Recommendation Mode)
+
+**ผลลัพธ์:** จัดระเบียบโฟลเดอร์ได้อย่างเป็นระบบ ป้องกันข้อมูลเสียหาย และย้อนกลับได้เสมอ
 
 ### Phase 5 — Process & Port Inspector
 

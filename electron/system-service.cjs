@@ -2,6 +2,7 @@ const { exec } = require('child_process');
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { shell } = require('electron');
 
 const UPGRADE_CODE = '{B6A87432-84F1-4F2A-949B-E412581699AB}';
@@ -2345,6 +2346,640 @@ async function inspectFiles(filePaths) {
   return results;
 }
 
+// ==============================================================================
+// FILE ORGANIZER ENGINE (v0.10.3)
+// Rule Engine, Dry-run Preview, Conflict Handling, Safe Cross-Drive Move & Undo Journal
+// ==============================================================================
+
+function getOrganizerStorageDir() {
+  const appData = process.env.APPDATA || (process.platform === 'darwin' ? path.join(os.homedir(), 'Library/Preferences') : path.join(os.homedir(), '.local/share'));
+  const targetDir = path.join(appData, 'SysInfo', 'organizer');
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+  return targetDir;
+}
+
+const DEFAULT_PRESET_RULES = [
+  {
+    id: 'preset_by_type',
+    name: 'จัดตามประเภทไฟล์ (By File Type)',
+    description: 'จัดหมวดหมู่แยกรูปภาพ, เอกสาร, วิดีโอ, สื่อ, ซิป, โปรแกรม และโค้ดลงโฟลเดอร์ย่อย',
+    isPreset: true,
+    isEnabled: true,
+    priority: 10,
+    targetTemplate: '{type}',
+    conflictStrategy: 'rename',
+    conditions: [
+      { ruleType: 'category', category: 'All' }
+    ]
+  },
+  {
+    id: 'preset_by_date',
+    name: 'จัดตามปีและเดือน (By Date: YYYY/MM)',
+    description: 'จัดระเบียบไฟล์ตามช่วงเวลาที่สร้างหรือแก้ไขล่าสุดลงโฟลเดอร์ตามปีและเดือน (เช่น 2026/10)',
+    isPreset: true,
+    isEnabled: true,
+    priority: 20,
+    targetTemplate: '{year}/{month}',
+    conflictStrategy: 'rename',
+    conditions: [
+      { ruleType: 'category', category: 'All' }
+    ]
+  },
+  {
+    id: 'preset_downloads',
+    name: 'จัดระเบียบโฟลเดอร์ Downloads',
+    description: 'ล้างโฟลเดอร์ดาวน์โหลด โดยแยกเอกสาร, โปรแกรมติดตั้ง, ซิป และสื่อมีเดียตามประเภทและปี',
+    isPreset: true,
+    isEnabled: true,
+    priority: 30,
+    targetTemplate: '{type}/{year}',
+    conflictStrategy: 'rename',
+    conditions: [
+      { ruleType: 'category', category: 'All' }
+    ]
+  },
+  {
+    id: 'preset_dev_game',
+    name: 'จัดระเบียบ Dev & Game Assets',
+    description: 'แยกไฟล์แอสเซทเกม (.pak, .ucas, .bundle), ซอสโค้ด (.ts, .rs, .py), บันทึก log และไฟล์บิลด์',
+    isPreset: true,
+    isEnabled: true,
+    priority: 40,
+    targetTemplate: 'Assets/{type}',
+    conflictStrategy: 'rename',
+    conditions: [
+      { ruleType: 'category', category: 'All' }
+    ]
+  }
+];
+
+function getFileCategory(ext) {
+  const e = (ext || '').toLowerCase().replace(/^\./, '');
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff', 'psd', 'raw'].includes(e)) return 'Images';
+  if (['pdf', 'docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'txt', 'md', 'rtf', 'csv'].includes(e)) return 'Documents';
+  if (['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v'].includes(e)) return 'Videos';
+  if (['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'wma'].includes(e)) return 'Audio';
+  if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'iso', 'vhd'].includes(e)) return 'Archives';
+  if (['exe', 'msi', 'bat', 'cmd', 'ps1', 'apk'].includes(e)) return 'Executables';
+  if (['js', 'ts', 'jsx', 'tsx', 'py', 'rs', 'go', 'cpp', 'c', 'h', 'java', 'html', 'css', 'json', 'xml', 'yaml', 'yml'].includes(e)) return 'Code';
+  if (['pak', 'ucas', 'utoc', 'starpak', 'vpk', 'bundle', 'assets', 'unity3d', 'res', 'wad', 'bik', 'dat'].includes(e)) return 'GameAssets';
+  return 'Others';
+}
+
+function calculateFileSha256(filePath) {
+  try {
+    const hash = crypto.createHash('sha256');
+    const fd = fs.openSync(filePath, 'r');
+    const buffer = Buffer.alloc(65536);
+    let bytesRead = 0;
+    while ((bytesRead = fs.readSync(fd, buffer, 0, buffer.length, null)) > 0) {
+      hash.update(buffer.subarray(0, bytesRead));
+    }
+    fs.closeSync(fd);
+    return hash.digest('hex');
+  } catch (err) {
+    return '';
+  }
+}
+
+function formatSize(sizeMB) {
+  if (sizeMB >= 1024) {
+    return `${(sizeMB / 1024).toFixed(2)} GB`;
+  }
+  return `${sizeMB.toFixed(2)} MB`;
+}
+
+function checkSafetyBoundary(targetPath) {
+  const norm = path.normalize(targetPath).toLowerCase();
+  const protectedRoots = [
+    'c:\\windows',
+    'c:\\program files',
+    'c:\\program files (x86)',
+    'c:\\recovery',
+    'c:\\$recycle.bin',
+    'c:\\system volume information'
+  ];
+  for (const root of protectedRoots) {
+    if (norm === root || norm.startsWith(root + '\\')) {
+      return { safe: false, reason: `ตำแหน่งระบบของ Windows ได้รับการปกป้อง (${targetPath}) ห้ามจัดระเบียบไฟล์เข้า/ออกจากระบบนี้` };
+    }
+  }
+
+  // Check project markers
+  const markers = ['.git', 'package.json', 'cargo.toml', 'go.mod'];
+  try {
+    for (const marker of markers) {
+      if (fs.existsSync(path.join(targetPath, marker))) {
+        return { safe: false, reason: `ตรวจพบโครงสร้างโปรเจกต์นักพัฒนา (${marker}) ในโฟลเดอร์นี้ ไม่อนุญาตให้แยกไฟล์โปรเจกต์ออกจากกันเพื่อป้องกันความเสียหาย` };
+      }
+    }
+  } catch (e) {}
+
+  return { safe: true };
+}
+
+function expandDestinationTemplate(baseTargetDir, filePath, template, counter, category, stat) {
+  const baseName = path.basename(filePath);
+  const ext = path.extname(filePath).replace(/^\./, '');
+  const stem = path.basename(filePath, path.extname(filePath));
+  const mtime = stat ? new Date(stat.mtime) : new Date();
+
+  const year = String(mtime.getFullYear());
+  const month = String(mtime.getMonth() + 1).padStart(2, '0');
+  const day = String(mtime.getDate()).padStart(2, '0');
+  const sizeMB = stat ? (stat.size / (1024 * 1024)).toFixed(1) + 'MB' : '0MB';
+
+  let subDir = (template || '{type}')
+    .replace(/\{type\}/gi, category)
+    .replace(/\{ext\}/gi, ext || 'unknown')
+    .replace(/\{year\}/gi, year)
+    .replace(/\{month\}/gi, month)
+    .replace(/\{day\}/gi, day)
+    .replace(/\{name\}/gi, stem)
+    .replace(/\{size\}/gi, sizeMB)
+    .replace(/\{counter\}/gi, String(counter).padStart(2, '0'));
+
+  subDir = subDir.replace(/[\/\\:]+/g, '\\').replace(/^\\+|\\+$/g, '');
+  const targetDir = path.join(baseTargetDir, subDir);
+  return path.join(targetDir, baseName);
+}
+
+// Rules CRUD
+async function organizerListRules() {
+  const rulesPath = path.join(getOrganizerStorageDir(), 'rules.json');
+  try {
+    if (fs.existsSync(rulesPath)) {
+      const customRules = JSON.parse(fs.readFileSync(rulesPath, 'utf8') || '[]');
+      const ruleMap = new Map();
+      DEFAULT_PRESET_RULES.forEach(r => ruleMap.set(r.id, r));
+      customRules.forEach(r => ruleMap.set(r.id, r));
+      return Array.from(ruleMap.values()).sort((a, b) => (a.priority || 100) - (b.priority || 100));
+    }
+  } catch (err) {}
+  return DEFAULT_PRESET_RULES;
+}
+
+async function organizerSaveRule(rule) {
+  if (!rule || !rule.id) {
+    return { success: false, error: 'ข้อมูลกฎไม่ถูกต้อง' };
+  }
+  const rulesPath = path.join(getOrganizerStorageDir(), 'rules.json');
+  try {
+    const current = await organizerListRules();
+    const index = current.findIndex(r => r.id === rule.id);
+    if (index >= 0) {
+      current[index] = { ...current[index], ...rule, updatedAt: new Date().toISOString() };
+    } else {
+      current.push({ ...rule, isPreset: false, createdAt: new Date().toISOString() });
+    }
+    fs.writeFileSync(rulesPath, JSON.stringify(current, null, 2), 'utf8');
+    return { success: true, rule };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+async function organizerDeleteRule(ruleId) {
+  const rulesPath = path.join(getOrganizerStorageDir(), 'rules.json');
+  try {
+    const current = await organizerListRules();
+    const filtered = current.filter(r => r.id !== ruleId && !r.isPreset);
+    fs.writeFileSync(rulesPath, JSON.stringify(filtered, null, 2), 'utf8');
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// Preview Engine
+async function organizerPreview(params) {
+  const { sourceDir, targetBaseDir, ruleId, customTemplate, conflictStrategy = 'rename', recursive = false } = params || {};
+
+  if (!sourceDir || !fs.existsSync(sourceDir)) {
+    return { success: false, error: 'ไม่พบโฟลเดอร์ต้นทางที่ระบุ' };
+  }
+
+  const boundaryCheck = checkSafetyBoundary(sourceDir);
+  if (!boundaryCheck.safe) {
+    return { success: false, error: boundaryCheck.reason };
+  }
+
+  const effectiveTarget = targetBaseDir || sourceDir;
+  const rules = await organizerListRules();
+  const selectedRule = rules.find(r => r.id === ruleId) || rules[0] || DEFAULT_PRESET_RULES[0];
+  const template = customTemplate || selectedRule.targetTemplate || '{type}';
+
+  const planItems = [];
+  let totalBytes = 0;
+  let conflictsCount = 0;
+  let identicalDuplicatesCount = 0;
+  let counter = 1;
+
+  function scanFolder(dir, depth = 0) {
+    if (depth > (recursive ? 3 : 0)) return;
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (recursive && !['node_modules', '.git', '$recycle.bin'].includes(entry.name.toLowerCase())) {
+            scanFolder(fullPath, depth + 1);
+          }
+        } else if (entry.isFile()) {
+          try {
+            const stat = fs.statSync(fullPath);
+            const ext = path.extname(entry.name);
+            const category = getFileCategory(ext);
+
+            const plannedTarget = expandDestinationTemplate(effectiveTarget, fullPath, template, counter, category, stat);
+            counter++;
+
+            let conflictType = 'none';
+            let suggestedAction = conflictStrategy;
+
+            if (fs.existsSync(plannedTarget)) {
+              conflictsCount++;
+              try {
+                const targetStat = fs.statSync(plannedTarget);
+                if (targetStat.size === stat.size) {
+                  const srcHash = calculateFileSha256(fullPath);
+                  const destHash = calculateFileSha256(plannedTarget);
+                  if (srcHash && destHash && srcHash === destHash) {
+                    conflictType = 'identical_duplicate';
+                    identicalDuplicatesCount++;
+                    suggestedAction = 'recycle_duplicate';
+                  } else {
+                    conflictType = 'name_collision';
+                    suggestedAction = 'rename';
+                  }
+                } else {
+                  conflictType = 'name_collision';
+                  suggestedAction = 'rename';
+                }
+              } catch (e) {
+                conflictType = 'name_collision';
+              }
+            }
+
+            const sizeBytes = stat.size;
+            totalBytes += sizeBytes;
+            const srcDrive = path.parse(fullPath).root.toUpperCase();
+            const destDrive = path.parse(plannedTarget).root.toUpperCase();
+            const isCrossDrive = srcDrive !== destDrive;
+
+            planItems.push({
+              id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              sourcePath: fullPath,
+              targetPath: plannedTarget,
+              fileName: entry.name,
+              extension: ext,
+              category,
+              sizeBytes,
+              formattedSize: formatSize(sizeBytes / (1024 * 1024)),
+              modifiedAt: stat.mtime.toISOString(),
+              mtimeMs: stat.mtimeMs,
+              matchedRuleName: selectedRule.name,
+              conflictType,
+              suggestedAction,
+              isCrossDrive,
+              isSelected: true
+            });
+          } catch (fileErr) {}
+        }
+      }
+    } catch (dirErr) {}
+  }
+
+  scanFolder(sourceDir, 0);
+
+  return {
+    success: true,
+    sourceDirectory: sourceDir,
+    targetBaseDirectory: effectiveTarget,
+    totalFiles: planItems.length,
+    totalBytes,
+    conflictsCount,
+    identicalDuplicatesCount,
+    planItems
+  };
+}
+
+// Safe Cross-Drive File Move with Verification
+function executeSafeMove(src, dest, conflictAction, srcStat) {
+  let finalDest = dest;
+  const destDir = path.dirname(dest);
+
+  if (!fs.existsSync(destDir)) {
+    fs.mkdirSync(destDir, { recursive: true });
+  }
+
+  // Handle conflicts
+  if (fs.existsSync(finalDest)) {
+    if (conflictAction === 'skip') {
+      return { skipped: true, reason: 'File already exists and skip was requested' };
+    } else if (conflictAction === 'recycle_duplicate') {
+      try {
+        shell.trashItem(src);
+        return { recycledDuplicate: true };
+      } catch (e) {
+        return { skipped: true, reason: 'Failed sending duplicate to Recycle Bin' };
+      }
+    } else if (conflictAction === 'rename' || !conflictAction) {
+      const ext = path.extname(dest);
+      const stem = path.basename(dest, ext);
+      let idx = 1;
+      while (fs.existsSync(path.join(destDir, `${stem} (${idx})${ext}`))) {
+        idx++;
+      }
+      finalDest = path.join(destDir, `${stem} (${idx})${ext}`);
+    }
+  }
+
+  const isCross = path.parse(src).root.toLowerCase() !== path.parse(finalDest).root.toLowerCase();
+  const stat = srcStat || fs.statSync(src);
+
+  if (!isCross) {
+    try {
+      fs.renameSync(src, finalDest);
+      return { success: true, finalDest, isCrossDrive: false };
+    } catch (renameErr) {
+      if (renameErr.code !== 'EXDEV') {
+        throw renameErr;
+      }
+    }
+  }
+
+  // Cross-drive: Copy -> Verify Size & Hash -> Preserve Timestamp -> Delete source
+  const tempDest = `${finalDest}.tmp_${Date.now()}`;
+  fs.copyFileSync(src, tempDest);
+
+  const copiedStat = fs.statSync(tempDest);
+  if (copiedStat.size !== stat.size) {
+    try { fs.unlinkSync(tempDest); } catch (e) {}
+    throw new Error('Cross-drive verification failed: File size mismatch');
+  }
+
+  const srcHash = calculateFileSha256(src);
+  const copiedHash = calculateFileSha256(tempDest);
+  if (srcHash && copiedHash && srcHash !== copiedHash) {
+    try { fs.unlinkSync(tempDest); } catch (e) {}
+    throw new Error('Cross-drive verification failed: File SHA-256 hash mismatch');
+  }
+
+  fs.renameSync(tempDest, finalDest);
+  try {
+    fs.utimesSync(finalDest, stat.atime, stat.mtime);
+  } catch (e) {}
+  fs.unlinkSync(src);
+
+  return { success: true, finalDest, isCrossDrive: true, hash: srcHash };
+}
+
+// Batch Apply & Undo Journal
+async function organizerApply(params) {
+  const { batchId, ruleId, ruleName, sourceDir, targetBaseDir, items = [] } = params || {};
+  const currentBatchId = batchId || `batch_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const journalPath = path.join(getOrganizerStorageDir(), 'journal.json');
+
+  const moveRecords = [];
+  let movedCount = 0;
+  let failedCount = 0;
+  let recycledCount = 0;
+  let totalMovedBytes = 0;
+  const errors = [];
+
+  for (const item of items) {
+    if (!item.isSelected) continue;
+    const src = item.sourcePath;
+    const target = item.targetPath;
+
+    if (!fs.existsSync(src)) {
+      failedCount++;
+      errors.push(`File missing at source: ${src}`);
+      continue;
+    }
+
+    try {
+      const stat = fs.statSync(src);
+      const res = executeSafeMove(src, target, item.suggestedAction || 'rename', stat);
+
+      if (res.skipped) {
+        continue;
+      } else if (res.recycledDuplicate) {
+        recycledCount++;
+        continue;
+      }
+
+      movedCount++;
+      totalMovedBytes += item.sizeBytes || stat.size;
+      moveRecords.push({
+        id: `rec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        sourcePath: src,
+        destinationPath: res.finalDest,
+        fileSize: item.sizeBytes || stat.size,
+        sourceMtimeMs: stat.mtimeMs,
+        sourceHash: res.hash || '',
+        isCrossDrive: res.isCrossDrive || false,
+        movedAt: new Date().toISOString(),
+        status: 'moved'
+      });
+    } catch (err) {
+      failedCount++;
+      errors.push(`Failed moving ${path.basename(src)}: ${err.message}`);
+    }
+  }
+
+  const batchRecord = {
+    batchId: currentBatchId,
+    ruleId: ruleId || 'custom',
+    ruleName: ruleName || 'จัดระเบียบไฟล์',
+    sourceDirectory: sourceDir,
+    targetBaseDirectory: targetBaseDir || sourceDir,
+    totalFiles: movedCount,
+    totalBytes: totalMovedBytes,
+    recycledDuplicates: recycledCount,
+    failedFiles: failedCount,
+    createdAt: new Date().toISOString(),
+    formattedDate: new Date().toLocaleString('th-TH'),
+    isUndone: false,
+    undoneAt: null,
+    records: moveRecords
+  };
+
+  try {
+    let history = [];
+    if (fs.existsSync(journalPath)) {
+      history = JSON.parse(fs.readFileSync(journalPath, 'utf8') || '[]');
+    }
+    history.unshift(batchRecord);
+    fs.writeFileSync(journalPath, JSON.stringify(history, null, 2), 'utf8');
+  } catch (jErr) {}
+
+  return {
+    success: true,
+    batch: batchRecord,
+    movedCount,
+    recycledCount,
+    failedCount,
+    errors
+  };
+}
+
+// Undo Engine
+async function organizerUndo(batchId) {
+  if (!batchId) {
+    return { success: false, error: 'ไม่ระบุรหัส Batch ที่ต้องการย้อนกลับ' };
+  }
+
+  const journalPath = path.join(getOrganizerStorageDir(), 'journal.json');
+  if (!fs.existsSync(journalPath)) {
+    return { success: false, error: 'ไม่พบบันทึกประวัติ Journal ของการจัดระเบียบไฟล์' };
+  }
+
+  try {
+    const history = JSON.parse(fs.readFileSync(journalPath, 'utf8') || '[]');
+    const batch = history.find(b => b.batchId === batchId);
+    if (!batch) {
+      return { success: false, error: `ไม่พบประวัติ Batch: ${batchId}` };
+    }
+    if (batch.isUndone) {
+      return { success: false, error: 'ชุดไฟล์นี้ถูกย้อนกลับ (Undo) ไปเรียบร้อยแล้ว' };
+    }
+
+    let restoredCount = 0;
+    let failedCount = 0;
+    const errors = [];
+    const restoredFiles = [];
+
+    // Revert records in reverse order
+    const records = [...(batch.records || [])].reverse();
+    for (const rec of records) {
+      const dest = rec.destinationPath;
+      const origSrc = rec.sourcePath;
+
+      if (!fs.existsSync(dest)) {
+        failedCount++;
+        errors.push(`ไฟล์ปลายทางหายไป ไม่สามารถย้อนกลับได้: ${dest}`);
+        continue;
+      }
+
+      try {
+        const destStat = fs.statSync(dest);
+        const res = executeSafeMove(dest, origSrc, 'overwrite', destStat);
+        if (rec.sourceMtimeMs) {
+          try {
+            const origDate = new Date(rec.sourceMtimeMs);
+            fs.utimesSync(origSrc, origDate, origDate);
+          } catch (utErr) {}
+        }
+        rec.status = 'restored';
+        restoredCount++;
+        restoredFiles.push(origSrc);
+      } catch (err) {
+        failedCount++;
+        errors.push(`ย้อนกลับไฟล์ ${path.basename(dest)} ล้มเหลว: ${err.message}`);
+      }
+    }
+
+    batch.isUndone = true;
+    batch.undoneAt = new Date().toISOString();
+    fs.writeFileSync(journalPath, JSON.stringify(history, null, 2), 'utf8');
+
+    return {
+      success: true,
+      batchId,
+      restoredCount,
+      failedCount,
+      restoredFiles,
+      errors
+    };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// History & Journal
+async function organizerGetHistory() {
+  const journalPath = path.join(getOrganizerStorageDir(), 'journal.json');
+  try {
+    if (fs.existsSync(journalPath)) {
+      return JSON.parse(fs.readFileSync(journalPath, 'utf8') || '[]');
+    }
+  } catch (e) {}
+  return [];
+}
+
+// Clean Empty Folders
+async function organizerCleanEmptyFolders(sourceDir) {
+  if (!sourceDir || !fs.existsSync(sourceDir)) {
+    return { success: false, error: 'ไม่พบโฟลเดอร์ที่ระบุ' };
+  }
+
+  const boundaryCheck = checkSafetyBoundary(sourceDir);
+  if (!boundaryCheck.safe) {
+    return { success: false, error: boundaryCheck.reason };
+  }
+
+  const emptyFolders = [];
+  const deletedFolders = [];
+
+  function findAndRemoveEmptyDirs(dir) {
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const subDir = path.join(dir, entry.name);
+          findAndRemoveEmptyDirs(subDir);
+        }
+      }
+
+      const remaining = fs.readdirSync(dir);
+      if (remaining.length === 0 && dir.toLowerCase() !== sourceDir.toLowerCase()) {
+        emptyFolders.push(dir);
+        try {
+          fs.rmdirSync(dir);
+          deletedFolders.push(dir);
+        } catch (rmErr) {}
+      }
+    } catch (e) {}
+  }
+
+  findAndRemoveEmptyDirs(sourceDir);
+
+  return {
+    success: true,
+    sourceDir,
+    totalCleaned: deletedFolders.length,
+    deletedFolders
+  };
+}
+
+// Watch Folder Check (Recommendation Mode)
+async function organizerCheckWatchFolder(watchPath) {
+  const target = watchPath || path.join(os.homedir(), 'Downloads');
+  if (!fs.existsSync(target)) {
+    return { hasRecommendation: false };
+  }
+
+  try {
+    const entries = fs.readdirSync(target, { withFileTypes: true });
+    const files = entries.filter(e => e.isFile());
+    if (files.length >= 8) {
+      return {
+        hasRecommendation: true,
+        folderPath: target,
+        fileCount: files.length,
+        suggestedRuleName: 'จัดระเบียบโฟลเดอร์ Downloads',
+        message: `พบไฟล์สะสมในโฟลเดอร์ ${path.basename(target)} จำนวน ${files.length} ไฟล์ คุณสามารถจัดระเบียบให้เข้าที่ได้ด้วย 1 คลิก`
+      };
+    }
+  } catch (e) {}
+
+  return { hasRecommendation: false };
+}
+
 module.exports = {
   getSystemDrives,
   getSystemTelemetry,
@@ -2370,5 +3005,14 @@ module.exports = {
   moveFileItem,
   inspectFiles,
   getDetectedGameRoots,
-  scanGameLibraries
+  scanGameLibraries,
+  organizerListRules,
+  organizerSaveRule,
+  organizerDeleteRule,
+  organizerPreview,
+  organizerApply,
+  organizerUndo,
+  organizerGetHistory,
+  organizerCleanEmptyFolders,
+  organizerCheckWatchFolder
 };
