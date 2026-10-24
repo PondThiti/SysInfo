@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, clipboard, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const systemService = require('./system-service.cjs');
@@ -11,6 +11,7 @@ function createWindow() {
     : path.join(__dirname, 'assets/icon.png');
 
   mainWindow = new BrowserWindow({
+    title: 'SysInfo',
     width: 1280,
     height: 840,
     minWidth: 1024,
@@ -170,6 +171,51 @@ ipcMain.handle('detect-program-conflicts', async () => {
 
 ipcMain.handle('resolve-conflict', async (_event, conflictId, pids) => {
   return await systemService.resolveConflict(conflictId, pids);
+});
+
+// File Sync, Move & Delete handlers
+ipcMain.handle('choose-files', async () => {
+  if (!mainWindow) return null;
+  const res = await dialog.showOpenDialog(mainWindow, {
+    title: 'เลือกไฟล์ที่ต้องการตรวจสอบ (Select Files to Inspect)',
+    properties: ['openFile', 'multiSelections']
+  });
+  if (res.canceled || !res.filePaths || res.filePaths.length === 0) {
+    return null;
+  }
+  return res.filePaths;
+});
+
+ipcMain.handle('inspect-files', async (_event, filePaths) => {
+  return await systemService.inspectFiles(filePaths);
+});
+
+ipcMain.handle('choose-folder', async () => {
+  if (!mainWindow) return null;
+  const res = await dialog.showOpenDialog(mainWindow, {
+    title: 'เลือกโฟลเดอร์ปลายทางสำหรับการย้ายไฟล์',
+    properties: ['openDirectory', 'createDirectory']
+  });
+  if (res.canceled || !res.filePaths || res.filePaths.length === 0) {
+    return null;
+  }
+  return res.filePaths[0];
+});
+
+ipcMain.handle('sync-files-status', async (_event, files) => {
+  return await systemService.syncFilesStatus(files);
+});
+
+ipcMain.handle('sync-duplicate-groups', async (_event, groups) => {
+  return await systemService.syncDuplicateGroups(groups);
+});
+
+ipcMain.handle('delete-file-item', async (_event, targetPath, safeRecycleBin) => {
+  return await systemService.deleteFileItem(targetPath, safeRecycleBin);
+});
+
+ipcMain.handle('move-file-item', async (_event, sourcePath, destDirPath) => {
+  return await systemService.moveFileItem(sourcePath, destDirPath);
 });
 
 app.whenReady().then(() => {

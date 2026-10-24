@@ -25,5 +25,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   uninstallSelf: () => ipcRenderer.invoke('uninstall-self'),
   getAllBackgroundProcesses: () => ipcRenderer.invoke('get-all-background-processes'),
   detectProgramConflicts: () => ipcRenderer.invoke('detect-program-conflicts'),
-  resolveConflict: (conflictId, pids) => ipcRenderer.invoke('resolve-conflict', conflictId, pids)
+  resolveConflict: (conflictId, pids) => ipcRenderer.invoke('resolve-conflict', conflictId, pids),
+  chooseFolder: () => ipcRenderer.invoke('choose-folder'),
+  chooseFiles: () => ipcRenderer.invoke('choose-files'),
+  inspectFiles: (filePaths) => ipcRenderer.invoke('inspect-files', filePaths),
+  syncFilesStatus: (files) => ipcRenderer.invoke('sync-files-status', files),
+  syncDuplicateGroups: (groups) => ipcRenderer.invoke('sync-duplicate-groups', groups),
+  deleteFileItem: (targetPath, safeRecycleBin) => ipcRenderer.invoke('delete-file-item', targetPath, safeRecycleBin),
+  moveFileItem: (sourcePath, destDirPath) => ipcRenderer.invoke('move-file-item', sourcePath, destDirPath)
 });

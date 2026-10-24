@@ -1012,10 +1012,16 @@ title Uninstalling System Storage & Port Inspector...
 timeout /t 2 /nobreak >nul
 
 :: Terminate any remaining app instances so no files are in use
+taskkill /F /IM "sysinfo.exe" /T >nul 2>&1
+taskkill /F /IM "SysInfo.exe" /T >nul 2>&1
 taskkill /F /IM "System Storage & Port Inspector.exe" /T >nul 2>&1
 timeout /t 1 /nobreak >nul
 
 :: 1. Try NSIS uninstaller if installed via NSIS
+if exist "${appPath}\\Uninstall SysInfo.exe" (
+    start "" /wait "${appPath}\\Uninstall SysInfo.exe" /S
+    goto CLEANUP
+)
 if exist "${appPath}\\Uninstall System Storage & Port Inspector.exe" (
     start "" /wait "${appPath}\\Uninstall System Storage & Port Inspector.exe" /S
     goto CLEANUP
@@ -1023,7 +1029,7 @@ if exist "${appPath}\\Uninstall System Storage & Port Inspector.exe" (
 
 :: 2. Find MSI ProductCode from Registry
 set PRODUCT_CODE=
-for /f "usebackq tokens=*" %%A in (\`powershell -NoProfile -Command "try { $p = Get-ItemProperty 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'System Storage & Port Inspector' } | Select-Object -First 1; if ($p.PSChildName) { $p.PSChildName } elseif ($p.UninstallString -match '\{[A-Fa-f0-9-]+\}') { $matches[0] } } catch {}"\`) do (
+for /f "usebackq tokens=*" %%A in (\`powershell -NoProfile -Command "try { $p = Get-ItemProperty 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'SysInfo' -or $_.DisplayName -eq 'System Storage & Port Inspector' } | Select-Object -First 1; if ($p.PSChildName) { $p.PSChildName } elseif ($p.UninstallString -match '\{[A-Fa-f0-9-]+\}') { $matches[0] } } catch {}"\`) do (
     set PRODUCT_CODE=%%A
 )
 
@@ -1043,8 +1049,12 @@ if not "%PRODUCT_CODE%"=="" (
 )
 
 :: 4. If neither, remove files and shortcuts cleanly
+del /f /q "%PUBLIC%\\Desktop\\SysInfo.lnk" >nul 2>&1
+del /f /q "%USERPROFILE%\\Desktop\\SysInfo.lnk" >nul 2>&1
 del /f /q "%PUBLIC%\\Desktop\\System Storage & Port Inspector.lnk" >nul 2>&1
 del /f /q "%USERPROFILE%\\Desktop\\System Storage & Port Inspector.lnk" >nul 2>&1
+rd /s /q "%ProgramData%\\Microsoft\\Windows\\Start Menu\\Programs\\SysInfo" >nul 2>&1
+rd /s /q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\SysInfo" >nul 2>&1
 rd /s /q "%ProgramData%\\Microsoft\\Windows\\Start Menu\\Programs\\System Storage & Port Inspector" >nul 2>&1
 rd /s /q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\System Storage & Port Inspector" >nul 2>&1
 
@@ -1360,6 +1370,524 @@ async function resolveConflict(conflictId, pids = []) {
   return { success: true, killedCount };
 }
 
+// ============================================================================
+// 15. SYNC, MOVE & DELETE SPECIFIC FILES (REAL-TIME STATUS FOR DELETED/MOVED FILES)
+// ============================================================================
+
+// Candidate locations to check when a file disappears from its expected path
+function getMovedCandidatePaths(originalPath, fileName) {
+  const userProfile = process.env.USERPROFILE || '';
+  const candidates = [];
+
+  if (userProfile && fileName) {
+    candidates.push(path.join(userProfile, 'Desktop', fileName));
+    candidates.push(path.join(userProfile, 'Downloads', fileName));
+    candidates.push(path.join(userProfile, 'Documents', fileName));
+    candidates.push(path.join(userProfile, 'Videos', fileName));
+    candidates.push(path.join(userProfile, 'Music', fileName));
+    candidates.push(path.join(userProfile, 'Pictures', fileName));
+  }
+
+  // Parent and grandparent directories
+  if (originalPath && fileName) {
+    const parent = path.dirname(originalPath);
+    candidates.push(path.join(parent, fileName));
+    const grandparent = path.dirname(parent);
+    if (grandparent && grandparent !== parent) {
+      candidates.push(path.join(grandparent, fileName));
+    }
+  }
+
+  // Common other drive letters
+  const otherDrives = ['D:\\', 'E:\\', 'F:\\'];
+  for (const drv of otherDrives) {
+    if (fs.existsSync(drv) && fileName) {
+      candidates.push(path.join(drv, fileName));
+      candidates.push(path.join(drv, 'Downloads', fileName));
+    }
+  }
+
+  // Deduplicate and filter out originalPath
+  return Array.from(new Set(candidates)).filter(
+    (p) => p.toLowerCase() !== (originalPath || '').toLowerCase()
+  );
+}
+
+// Check and sync status for files list (detect if deleted, moved, or active)
+async function syncFilesStatus(files) {
+  if (!Array.isArray(files) || files.length === 0) {
+    return {
+      success: true,
+      files: [],
+      activeCount: 0,
+      movedCount: 0,
+      deletedCount: 0,
+      reclaimedMB: 0,
+      hasChanges: false
+    };
+  }
+
+  let activeCount = 0;
+  let movedCount = 0;
+  let deletedCount = 0;
+  let reclaimedMB = 0;
+
+  const updatedFiles = [];
+
+  for (const item of files) {
+    if (!item.path) {
+      deletedCount++;
+      continue;
+    }
+
+    // 1. Check if file still exists at current path
+    if (fs.existsSync(item.path)) {
+      try {
+        const st = fs.statSync(item.path);
+        const actualSizeMB = Number((st.size / (1024 * 1024)).toFixed(1));
+        activeCount++;
+        updatedFiles.push({
+          ...item,
+          status: 'active',
+          exists: true,
+          sizeMB: actualSizeMB > 0 ? actualSizeMB : item.sizeMB,
+          lastModified: new Date(st.mtime).toISOString().replace('T', ' ').substring(0, 16)
+        });
+      } catch (e) {
+        activeCount++;
+        updatedFiles.push({ ...item, status: 'active', exists: true });
+      }
+      continue;
+    }
+
+    // 2. File is missing from its original path! Check if it was moved
+    const fileName = item.name || path.basename(item.path);
+    const candidates = getMovedCandidatePaths(item.path, fileName);
+    let foundMovedPath = null;
+    let foundMtime = null;
+    let foundSizeMB = item.sizeMB;
+
+    for (const cand of candidates) {
+      try {
+        if (fs.existsSync(cand)) {
+          const st = fs.statSync(cand);
+          const candSizeMB = Number((st.size / (1024 * 1024)).toFixed(1));
+          // Check size match (within 1MB or same if > 0)
+          if (Math.abs(candSizeMB - item.sizeMB) <= 1 || (item.sizeMB === 0 && candSizeMB === 0)) {
+            foundMovedPath = cand;
+            foundMtime = new Date(st.mtime).toISOString().replace('T', ' ').substring(0, 16);
+            foundSizeMB = candSizeMB;
+            break;
+          }
+        }
+      } catch (candErr) {}
+    }
+
+    if (foundMovedPath) {
+      // File was MOVED!
+      movedCount++;
+      updatedFiles.push({
+        ...item,
+        status: 'moved',
+        exists: true,
+        previousPath: item.path,
+        path: foundMovedPath,
+        drive: foundMovedPath.substring(0, 2).toUpperCase(),
+        sizeMB: foundSizeMB,
+        lastModified: foundMtime || item.lastModified,
+        isRecentlyMoved: true
+      });
+    } else {
+      // File was DELETED!
+      deletedCount++;
+      reclaimedMB += item.sizeMB || 0;
+      updatedFiles.push({
+        ...item,
+        status: 'deleted',
+        exists: false
+      });
+    }
+  }
+
+  const hasChanges = movedCount > 0 || deletedCount > 0;
+  return {
+    success: true,
+    files: updatedFiles,
+    activeCount,
+    movedCount,
+    deletedCount,
+    reclaimedMB: Number(reclaimedMB.toFixed(1)),
+    hasChanges,
+    summary: hasChanges
+      ? `ตรวจพบไฟล์ถูกลบ ${deletedCount} รายการ และถูกเคลื่อนย้ายตำแหน่ง ${movedCount} รายการ`
+      : 'ไฟล์ทุกรายการในระบบยังคงอยู่ที่เดิมและมีขนาดถูกต้อง'
+  };
+}
+
+// Sync duplicate groups (drop deleted copies, update moved copies, remove groups with < 2 copies)
+async function syncDuplicateGroups(groups) {
+  if (!Array.isArray(groups) || groups.length === 0) {
+    return {
+      success: true,
+      updatedGroups: [],
+      removedGroupsCount: 0,
+      removedCopiesCount: 0,
+      hasChanges: false
+    };
+  }
+
+  let removedGroupsCount = 0;
+  let removedCopiesCount = 0;
+  let hasChanges = false;
+
+  const updatedGroups = [];
+
+  for (const group of groups) {
+    const validCopies = [];
+
+    for (const copy of group.copies || []) {
+      if (fs.existsSync(copy.path)) {
+        validCopies.push(copy);
+      } else {
+        // Check if copy was moved
+        const fileName = path.basename(copy.path);
+        const candidates = getMovedCandidatePaths(copy.path, fileName);
+        let movedPath = null;
+
+        for (const cand of candidates) {
+          try {
+            if (fs.existsSync(cand)) {
+              const st = fs.statSync(cand);
+              const candSizeMB = Number((st.size / (1024 * 1024)).toFixed(1));
+              if (Math.abs(candSizeMB - group.sizeEachMB) <= 1) {
+                movedPath = cand;
+                break;
+              }
+            }
+          } catch (e) {}
+        }
+
+        if (movedPath) {
+          hasChanges = true;
+          validCopies.push({
+            ...copy,
+            path: movedPath,
+            moved: true
+          });
+        } else {
+          // Copy was deleted
+          hasChanges = true;
+          removedCopiesCount++;
+        }
+      }
+    }
+
+    // A duplicate group must have at least 2 copies to remain valid
+    if (validCopies.length >= 2) {
+      updatedGroups.push({
+        ...group,
+        copies: validCopies
+      });
+    } else {
+      // 0 or 1 copy left, so it is no longer duplicate!
+      hasChanges = true;
+      removedGroupsCount++;
+    }
+  }
+
+  return {
+    success: true,
+    updatedGroups,
+    removedGroupsCount,
+    removedCopiesCount,
+    hasChanges
+  };
+}
+
+// Delete a specific file (Safe Delete to Recycle Bin or Permanent Delete) with blocker detection
+async function deleteFileItem(targetPath, safeRecycleBin = true) {
+  if (!targetPath) {
+    return { success: false, error: 'ไม่ระบุตำแหน่งไฟล์' };
+  }
+
+  if (!fs.existsSync(targetPath)) {
+    return { success: true, alreadyGone: true, message: 'ไฟล์นี้ถูกลบไปแล้ว' };
+  }
+
+  clearReadOnly(targetPath);
+
+  // 1. If Safe Delete requested, send to Recycle Bin
+  if (safeRecycleBin) {
+    try {
+      await shell.trashItem(targetPath);
+      return { success: true, method: 'recycle', message: 'ย้ายไฟล์ลงถังขยะ Recycle Bin เรียบร้อย' };
+    } catch (trashErr) {
+      // Fall through to try permanent removal if trash fails
+    }
+  }
+
+  // 2. Direct removal
+  try {
+    const stat = fs.lstatSync(targetPath);
+    if (stat.isDirectory()) {
+      fs.rmSync(targetPath, { recursive: true, force: true });
+    } else {
+      fs.unlinkSync(targetPath);
+    }
+    return { success: true, method: 'permanent', message: 'ลบไฟล์ถาวรเรียบร้อย' };
+  } catch (rmErr) {
+    // Find running processes that might lock the file
+    let blockers = [];
+    try {
+      const res = await runPowerShell(
+        `Get-Process -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, MainWindowTitle, Path | ConvertTo-Json -Depth 2`
+      );
+      if (res.success && res.data) {
+        const procList = Array.isArray(res.data) ? res.data : [res.data];
+        const lowerName = path.basename(targetPath).toLowerCase();
+        const lowerPath = targetPath.toLowerCase();
+
+        for (const p of procList) {
+          const pName = (p.ProcessName || '').toLowerCase();
+          if (
+            pName &&
+            (lowerPath.includes(pName) ||
+              lowerName.includes(pName) ||
+              (p.Path && lowerPath.includes(path.dirname(p.Path).toLowerCase())))
+          ) {
+            blockers.push({
+              pid: p.Id,
+              processName: `${p.ProcessName}.exe`,
+              windowTitle: p.MainWindowTitle || '',
+              path: p.Path || ''
+            });
+          }
+        }
+      }
+    } catch (e) {}
+
+    return {
+      success: false,
+      error:
+        rmErr.code === 'EBUSY'
+          ? 'ไฟล์ถูกโปรแกรมอื่นล็อกใช้งานอยู่ (EBUSY)'
+          : rmErr.message || 'ไม่สามารถลบไฟล์ได้',
+      code: rmErr.code,
+      blockers: blockers.slice(0, 5)
+    };
+  }
+}
+
+// Move a specific file to a destination directory
+async function moveFileItem(sourcePath, destDirPath) {
+  if (!sourcePath || !fs.existsSync(sourcePath)) {
+    return { success: false, error: 'ไม่พบไฟล์ต้นทางที่ต้องการย้าย' };
+  }
+
+  if (!destDirPath) {
+    return { success: false, error: 'ไม่ระบุโฟลเดอร์ปลายทาง' };
+  }
+
+  try {
+    if (!fs.existsSync(destDirPath)) {
+      fs.mkdirSync(destDirPath, { recursive: true });
+    }
+
+    const fileName = path.basename(sourcePath);
+    let targetPath = path.join(destDirPath, fileName);
+
+    // If file with same name already exists in target folder, give unique name
+    if (fs.existsSync(targetPath)) {
+      const ext = path.extname(fileName);
+      const baseName = path.basename(fileName, ext);
+      targetPath = path.join(destDirPath, `${baseName}_moved_${Date.now()}${ext}`);
+    }
+
+    try {
+      fs.renameSync(sourcePath, targetPath);
+    } catch (renameErr) {
+      if (renameErr.code === 'EXDEV') {
+        // Cross-device link: copy then unlink
+        fs.copyFileSync(sourcePath, targetPath);
+        fs.unlinkSync(sourcePath);
+      } else {
+        throw renameErr;
+      }
+    }
+
+    return {
+      success: true,
+      newPath: targetPath,
+      newDrive: targetPath.substring(0, 2).toUpperCase(),
+      fileName: path.basename(targetPath)
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error:
+        err.code === 'EBUSY'
+          ? 'ไฟล์ถูกล็อก ไม่สามารถย้ายได้'
+          : err.message || 'เกิดข้อผิดพลาดในการย้ายไฟล์'
+    };
+  }
+}
+
+// Inspect specific files (metadata, lock status, existence, in-use processes)
+async function inspectFiles(filePaths) {
+  if (!Array.isArray(filePaths) || filePaths.length === 0) {
+    return [];
+  }
+
+  let runningProcs = [];
+  try {
+    const res = await runPowerShell(
+      `Get-Process -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, MainWindowTitle, Path | ConvertTo-Json -Depth 2`
+    );
+    if (res.success && res.data) {
+      runningProcs = Array.isArray(res.data) ? res.data : [res.data];
+    }
+  } catch (e) {}
+
+  const results = [];
+  for (const fPath of filePaths) {
+    if (!fPath || typeof fPath !== 'string') continue;
+
+    const baseName = path.basename(fPath);
+    const ext = path.extname(fPath).toLowerCase();
+    const drive = fPath.substring(0, 2).toUpperCase();
+
+    if (!fs.existsSync(fPath)) {
+      results.push({
+        id: `inspect_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        path: fPath,
+        name: baseName,
+        extension: ext,
+        drive,
+        exists: false,
+        sizeMB: 0,
+        sizeBytes: 0,
+        formattedSize: '0 B',
+        category: 'ไม่พบไฟล์',
+        lastModified: '-',
+        createdDate: '-',
+        isLocked: false,
+        lockedBy: [],
+        status: 'deleted',
+        statusText: 'ไม่พบไฟล์ (อาจถูกลบหรือย้ายแล้ว)'
+      });
+      continue;
+    }
+
+    try {
+      const st = fs.statSync(fPath);
+      const isDir = st.isDirectory();
+      const sizeBytes = st.size;
+      const sizeMB = Number((sizeBytes / (1024 * 1024)).toFixed(2));
+      const formattedSize = isDir
+        ? 'โฟลเดอร์'
+        : sizeBytes < 1024
+        ? `${sizeBytes} B`
+        : sizeBytes < 1024 * 1024
+        ? `${(sizeBytes / 1024).toFixed(1)} KB`
+        : sizeBytes < 1024 * 1024 * 1024
+        ? `${(sizeBytes / (1024 * 1024)).toFixed(2)} MB`
+        : `${(sizeBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+
+      let category = 'ไฟล์ทั่วไป';
+      if (['.exe', '.msi', '.dll', '.sys', '.bat', '.cmd', '.ps1'].includes(ext)) {
+        category = 'โปรแกรม/ระบบ (Executable)';
+      } else if (['.zip', '.rar', '.7z', '.tar', '.gz', '.iso', '.vhd'].includes(ext)) {
+        category = 'ไฟล์บีบอัด/อิมเมจ (Archive)';
+      } else if (['.mp4', '.mkv', '.avi', '.mov', '.mp3', '.flac', '.wav', '.jpg', '.png', '.gif'].includes(ext)) {
+        category = 'สื่อมีเดีย (Media)';
+      } else if (['.log', '.tmp', '.bak', '.old', '.dmp'].includes(ext)) {
+        category = 'ไฟล์บันทึก/แคช (Log/Temp)';
+      } else if (['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv'].includes(ext)) {
+        category = 'เอกสาร (Document)';
+      } else if (isDir) {
+        category = 'โฟลเดอร์ไดเรกทอรี';
+      }
+
+      let isLocked = false;
+      const lockedBy = [];
+
+      if (!isDir) {
+        try {
+          const fd = fs.openSync(fPath, 'r+');
+          fs.closeSync(fd);
+        } catch (openErr) {
+          if (openErr.code === 'EBUSY' || openErr.code === 'EPERM') {
+            isLocked = true;
+          }
+        }
+      }
+
+      const lowerPath = fPath.toLowerCase();
+      const lowerBase = baseName.toLowerCase();
+      for (const p of runningProcs) {
+        const pName = (p.ProcessName || '').toLowerCase();
+        const pPath = (p.Path || '').toLowerCase();
+        if (
+          (pPath && pPath === lowerPath) ||
+          (pName && `${pName}.exe` === lowerBase) ||
+          (pPath && isDir && pPath.startsWith(lowerPath))
+        ) {
+          lockedBy.push({
+            pid: p.Id,
+            processName: `${p.ProcessName}.exe`,
+            windowTitle: p.MainWindowTitle || '',
+            path: p.Path || ''
+          });
+          isLocked = true;
+        }
+      }
+
+      results.push({
+        id: `inspect_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        path: fPath,
+        name: baseName,
+        extension: ext,
+        drive,
+        exists: true,
+        isDirectory: isDir,
+        sizeMB,
+        sizeBytes,
+        formattedSize,
+        category,
+        lastModified: st.mtime.toLocaleString('th-TH'),
+        createdDate: st.birthtime.toLocaleString('th-TH'),
+        isLocked,
+        lockedBy: lockedBy.slice(0, 5),
+        status: isLocked ? 'locked' : 'normal',
+        statusText: isLocked
+          ? `ไฟล์ถูกล็อก/ใช้งานอยู่ (${lockedBy.length > 0 ? lockedBy[0].processName : 'In Use'})`
+          : 'ปกติ สมบูรณ์ พร้อมจัดการ'
+      });
+    } catch (statErr) {
+      results.push({
+        id: `inspect_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        path: fPath,
+        name: baseName,
+        extension: ext,
+        drive,
+        exists: true,
+        sizeMB: 0,
+        sizeBytes: 0,
+        formattedSize: 'ไม่ระบุ',
+        category: 'จำกัดสิทธิ์เข้าถึง',
+        lastModified: '-',
+        createdDate: '-',
+        isLocked: true,
+        lockedBy: [],
+        status: 'error',
+        statusText: `เกิดข้อผิดพลาด: ${statErr.message}`
+      });
+    }
+  }
+
+  return results;
+}
+
 module.exports = {
   getSystemDrives,
   getSystemTelemetry,
@@ -1378,5 +1906,10 @@ module.exports = {
   uninstallSelf,
   getAllBackgroundProcesses,
   detectProgramConflicts,
-  resolveConflict
+  resolveConflict,
+  syncFilesStatus,
+  syncDuplicateGroups,
+  deleteFileItem,
+  moveFileItem,
+  inspectFiles
 };

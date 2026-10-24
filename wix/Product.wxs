@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
     <Product Id="*"
-             Name="System Storage &amp; Port Inspector"
+             Name="SysInfo"
              Language="1033"
-             Version="0.0.3.0"
-             Manufacturer="SysPulse"
+             Version="0.1.1.0"
+             Manufacturer="SysInfo"
              UpgradeCode="B6A87432-84F1-4F2A-949B-E412581699AB">
         
         <Package InstallerVersion="200"
                  Compressed="yes"
                  InstallScope="perMachine"
                  Platform="x64"
-                 Description="System Storage &amp; Port Inspector Setup"
-                 Comments="SysPulse All-in-One PC Utility with Complete Uninstaller" />
+                 Description="SysInfo Setup"
+                 Comments="SysInfo All-in-One PC Utility with Complete Uninstaller" />
 
         <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
         <MediaTemplate EmbedCab="yes" />
@@ -24,15 +24,15 @@
         <!-- Application Icon -->
         <Icon Id="AppIcon.ico" SourceFile="build\icon.ico" />
         <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
-        <Property Id="ARPHELPLINK" Value="https://github.com/SysPulse" />
+        <Property Id="ARPHELPLINK" Value="https://github.com/SysInfo" />
 
         <!-- Directory Structure -->
         <Directory Id="TARGETDIR" Name="SourceDir">
             <Directory Id="ProgramFiles64Folder">
-                <Directory Id="INSTALLFOLDER" Name="System Storage &amp; Port Inspector" />
+                <Directory Id="INSTALLFOLDER" Name="SysInfo" />
             </Directory>
             <Directory Id="ProgramMenuFolder">
-                <Directory Id="ApplicationProgramsFolder" Name="System Storage &amp; Port Inspector" />
+                <Directory Id="ApplicationProgramsFolder" Name="SysInfo" />
             </Directory>
             <Directory Id="DesktopFolder" Name="Desktop" />
         </Directory>
@@ -41,28 +41,28 @@
         <DirectoryRef Id="ApplicationProgramsFolder">
             <Component Id="ApplicationShortcut" Guid="{E82C8724-4B39-44F1-8B89-722E34629A10}">
                 <Shortcut Id="ApplicationStartMenuShortcut"
-                          Name="System Storage &amp; Port Inspector"
+                          Name="SysInfo"
                           Description="All-in-One Storage Analyzer, Smart Junk Cleaner &amp; Port Inspector"
-                          Target="[INSTALLFOLDER]System Storage &amp; Port Inspector.exe"
+                          Target="[INSTALLFOLDER]sysinfo.exe"
                           WorkingDirectory="INSTALLFOLDER"
                           Icon="AppIcon.ico" />
                 <Shortcut Id="ApplicationDesktopShortcut"
                           Directory="DesktopFolder"
-                          Name="System Storage &amp; Port Inspector"
+                          Name="SysInfo"
                           Description="All-in-One Storage Analyzer, Smart Junk Cleaner &amp; Port Inspector"
-                          Target="[INSTALLFOLDER]System Storage &amp; Port Inspector.exe"
+                          Target="[INSTALLFOLDER]sysinfo.exe"
                           WorkingDirectory="INSTALLFOLDER"
                           Icon="AppIcon.ico" />
                 <!-- Dedicated Clean Uninstaller Shortcut in Start Menu without Reboot -->
                 <Shortcut Id="UninstallProductShortcut"
-                          Name="Uninstall System Storage &amp; Port Inspector"
-                          Description="Uninstall System Storage &amp; Port Inspector cleanly and completely"
+                          Name="Uninstall SysInfo"
+                          Description="Uninstall SysInfo cleanly and completely"
                           Target="[System64Folder]msiexec.exe"
                           Arguments="/x [ProductCode] REBOOT=ReallySuppress"
                           Icon="AppIcon.ico" />
                 <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
-                <RegistryKey Root="HKCU" Key="Software\SysPulse" ForceDeleteOnUninstall="yes">
-                    <RegistryValue Type="string" Value="SysPulse" KeyPath="yes" />
+                <RegistryKey Root="HKCU" Key="Software\SysInfo" ForceDeleteOnUninstall="yes">
+                    <RegistryValue Type="string" Value="SysInfo" KeyPath="yes" />
                 </RegistryKey>
             </Component>
         </DirectoryRef>
@@ -72,15 +72,15 @@
             <Component Id="CleanUpInstallFolderComp" Guid="{7F89E82B-5BC3-431B-8239-0192A9388123}">
                 <CreateFolder />
                 <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
-                <RegistryValue Root="HKCU" Key="Software\SysPulse\SystemStoragePortInspector" Name="clean_folder" Type="integer" Value="1" KeyPath="yes" />
-                <RegistryValue Root="HKLM" Key="Software\SysPulse\SystemStoragePortInspector" Name="ProductCode" Type="string" Value="[ProductCode]" />
+                <RegistryValue Root="HKCU" Key="Software\SysInfo" Name="clean_folder" Type="integer" Value="1" KeyPath="yes" />
+                <RegistryValue Root="HKLM" Key="Software\SysInfo" Name="ProductCode" Type="string" Value="[ProductCode]" />
             </Component>
         </DirectoryRef>
 
         <!-- Terminate running app before installation/uninstallation so no files are held in use -->
         <CustomAction Id="KillRunningApp"
                       Directory="TARGETDIR"
-                      ExeCommand="cmd.exe /c taskkill /F /IM &quot;System Storage &amp; Port Inspector.exe&quot; /T"
+                      ExeCommand="cmd.exe /c taskkill /F /IM &quot;sysinfo.exe&quot; /T &amp; taskkill /F /IM &quot;SysInfo.exe&quot; /T &amp; taskkill /F /IM &quot;System Storage &amp; Port Inspector.exe&quot; /T"
                       Execute="immediate"
                       Return="ignore" />
 
@@ -89,7 +89,7 @@
         </InstallExecuteSequence>
 
         <!-- Features -->
-        <Feature Id="ProductFeature" Title="System Storage &amp; Port Inspector" Level="1">
+        <Feature Id="ProductFeature" Title="SysInfo" Level="1">
             <ComponentGroupRef Id="AppFiles" />
             <ComponentRef Id="ApplicationShortcut" />
             <ComponentRef Id="CleanUpInstallFolderComp" />

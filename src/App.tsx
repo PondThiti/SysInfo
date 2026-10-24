@@ -40,7 +40,10 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
-  Flame
+  Flame,
+  FolderInput,
+  FileSearch,
+  CheckSquare
 } from 'lucide-react';
 
 // Format size helper (MB to MB/GB)
@@ -89,12 +92,22 @@ export default function App() {
   const [backgroundSearch, setBackgroundSearch] = useState('');
   const [backgroundSortBy, setBackgroundSortBy] = useState<'ram' | 'name' | 'pid'>('ram');
   const [expandedBgGroups, setExpandedBgGroups] = useState<{ [key: string]: boolean }>({
-    user_app: true,
+    user_app: false,
     service: false,
     windows_app: false,
     system: false,
     other: false
   });
+
+  // Custom inspected files (เลือกไฟล์ที่จะตรวจสอบ)
+  const [customInspectedFiles, setCustomInspectedFiles] = useState<any[]>([]);
+  const [isInspectingFiles, setIsInspectingFiles] = useState(false);
+  const [selectedHeavyFileIds, setSelectedHeavyFileIds] = useState<Set<string>>(new Set());
+  const [fileInspectDetailModal, setFileInspectDetailModal] = useState<any | null>(null);
+
+  // Ports view mode & group collapse state (ให้ย่อพวกไฟล์ไว้ก่อน)
+  const [portViewMode, setPortViewMode] = useState<'grouped_by_file' | 'flat'>('grouped_by_file');
+  const [expandedPortFiles, setExpandedPortFiles] = useState<{ [key: string]: boolean }>({});
 
   // Conflicts & Collision Detector state (เช็คโปรแกรมขัดการทำงานกัน)
   const [conflicts, setConflicts] = useState<any[]>([]);
@@ -133,6 +146,28 @@ export default function App() {
   const [storageSortAsc, setStorageSortAsc] = useState(false);
   const [isScanningStorage, setIsScanningStorage] = useState(false);
   const [scanProgress, setScanProgress] = useState(100);
+
+  // File Sync & Tracking State (Auto-update Deleted & Moved files)
+  const [isSyncingFiles, setIsSyncingFiles] = useState(false);
+  const [fileSyncStats, setFileSyncStats] = useState<{
+    lastSyncTime: string;
+    deletedCount: number;
+    movedCount: number;
+    reclaimedMB: number;
+  } | null>(null);
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
+    file: any;
+    isDuplicateCopy?: boolean;
+    groupId?: string;
+  } | null>(null);
+  const [isDeletingSpecificFile, setIsDeletingSpecificFile] = useState(false);
+  const [isMovingFile, setIsMovingFile] = useState(false);
+
+  // References to keep latest arrays accessible in event listeners
+  const largeFilesRef = useRef(largeFiles);
+  largeFilesRef.current = largeFiles;
+  const duplicateGroupsRef = useRef(duplicateGroups);
+  duplicateGroupsRef.current = duplicateGroups;
 
   // Ports & Services filters
   const [portSearch, setPortSearch] = useState('');
@@ -309,6 +344,525 @@ export default function App() {
     }
   };
 
+  // Helper to dynamically recompute directory breakdown Treemap from an updated files list
+  const updateDirectoryBreakdownFromFiles = (files: any[]) => {
+    const dirMap: { [key: string]: { path: string; sizeMB: number; count: number } } = {};
+    for (const f of files) {
+      if (!f.path) continue;
+      const parts = f.path.split(/[\\/]/);
+      parts.pop(); // remove filename
+      const parent = parts.join('\\') || f.path;
+      if (!dirMap[parent]) {
+        dirMap[parent] = { path: parent, sizeMB: 0, count: 0 };
+      }
+      dirMap[parent].sizeMB += f.sizeMB || 0;
+      dirMap[parent].count += 1;
+    }
+
+    const colorPalette = [
+      'from-rose-600/90 to-rose-800/90 border-rose-400/40',
+      'from-indigo-600/90 to-purple-800/90 border-indigo-400/40',
+      'from-amber-600/90 to-orange-800/90 border-amber-400/40',
+      'from-emerald-600/90 to-teal-800/90 border-emerald-400/40',
+      'from-sky-600/90 to-blue-800/90 border-sky-400/40',
+      'from-slate-600/90 to-slate-800/90 border-slate-400/40',
+      'from-pink-600/90 to-rose-900/90 border-pink-400/40',
+      'from-cyan-600/90 to-blue-900/90 border-cyan-400/40'
+    ];
+
+    const sortedDirs = Object.values(dirMap)
+      .sort((a, b) => b.sizeMB - a.sizeMB)
+      .slice(0, 8);
+
+    const totalDirMB = sortedDirs.reduce((acc, d) => acc + d.sizeMB, 0) || 1;
+
+    const breakdowns = sortedDirs.map((d, idx) => {
+      const sizeGB = Number((d.sizeMB / 1024).toFixed(2));
+      const percent = Math.max(1, Math.round((d.sizeMB / totalDirMB) * 100));
+      const drive = d.path.substring(0, 2).toUpperCase();
+      const folderName = d.path.split(/[\\/]/).pop() || d.path;
+
+      let badge = 'Directory';
+      if (d.path.includes('Program Files')) badge = 'Applications';
+      else if (d.path.includes('Videos')) badge = 'Media / Video';
+      else if (d.path.includes('Downloads')) badge = 'Downloads';
+      else if (d.path.includes('AppData')) badge = 'AppData';
+      else if (d.path.includes('Package Cache')) badge = 'Installers';
+
+      return {
+        id: `tm_${idx}`,
+        label: `${folderName} (${d.path})`,
+        path: d.path,
+        drive,
+        sizeGB: sizeGB >= 0.1 ? sizeGB : Number((d.sizeMB / 1024).toFixed(2)),
+        sizeMB: d.sizeMB,
+        percent,
+        color: colorPalette[idx % colorPalette.length],
+        badge,
+        filesCount: `${d.count} ไฟล์ใหญ่`
+      };
+    });
+
+    setDirectoryBreakdown(breakdowns);
+  };
+
+  // Sync and update files that have been deleted or moved
+  const handleSyncFileStatus = async (userInitiated = false) => {
+    const currentFiles = largeFilesRef.current;
+    const currentGroups = duplicateGroupsRef.current;
+
+    if (isSyncingFiles) return;
+    if (currentFiles.length === 0 && currentGroups.length === 0) {
+      if (userInitiated) {
+        showToast('ไม่มีไฟล์ในรายการ', 'ยังไม่มีรายการไฟล์ที่สแกนไว้ กรุณากดสแกนไฟล์ก่อน', 'info');
+      }
+      return;
+    }
+
+    setIsSyncingFiles(true);
+    const start = performance.now();
+    try {
+      // 1. Sync Large Files
+      const fileRes = await (window as any).electronAPI?.syncFilesStatus?.(currentFiles);
+      // 2. Sync Duplicate Groups
+      const dupRes = await (window as any).electronAPI?.syncDuplicateGroups?.(currentGroups);
+
+      let hasChanges = false;
+      let deletedCount = 0;
+      let movedCount = 0;
+      let reclaimedMB = 0;
+
+      if (fileRes?.success) {
+        deletedCount = fileRes.deletedCount || 0;
+        movedCount = fileRes.movedCount || 0;
+        reclaimedMB = fileRes.reclaimedMB || 0;
+
+        if (fileRes.hasChanges) {
+          hasChanges = true;
+          // Keep only active and moved files (filter out deleted ones)
+          const validFiles = fileRes.files.filter((f: any) => f.status !== 'deleted');
+          setLargeFiles(validFiles);
+          updateDirectoryBreakdownFromFiles(validFiles);
+        }
+      }
+
+      if (dupRes?.success && dupRes.hasChanges) {
+        hasChanges = true;
+        setDuplicateGroups(dupRes.updatedGroups || []);
+      }
+
+      // If any files were deleted or moved:
+      if (hasChanges) {
+        // Refresh system drives so free space is updated
+        (window as any).electronAPI?.getSystemDrives?.().then((drives: any[]) => {
+          if (drives && Array.isArray(drives)) setSystemDrives(drives);
+        });
+
+        const timeStr = new Date().toTimeString().split(' ')[0];
+        setFileSyncStats({
+          lastSyncTime: timeStr,
+          deletedCount,
+          movedCount,
+          reclaimedMB
+        });
+
+        const msgParts = [];
+        if (deletedCount > 0) msgParts.push(`ลบไปแล้ว ${deletedCount} ไฟล์ (คืนพื้นที่ ${formatSize(reclaimedMB)})`);
+        if (movedCount > 0) msgParts.push(`ย้ายตำแหน่ง ${movedCount} ไฟล์`);
+
+        logIpc('sync_files_status', `อัปเดตไฟล์: ${msgParts.join(', ')}`, Math.round(performance.now() - start));
+        showToast(
+          'อัปเดตไฟล์ที่ถูกลบ/ย้ายแล้ว',
+          `ตรวจพบ: ${msgParts.join(' และ ')} รายการและขนาดพื้นที่ได้รับการอัปเดตเรียบร้อย`,
+          'info'
+        );
+      } else if (userInitiated) {
+        showToast(
+          'ข้อมูลไฟล์เป็นปัจจุบันแล้ว',
+          `ตรวจสอบแล้ว ${currentFiles.length} ไฟล์ ทุกรายการยังอยู่ที่เดิมและมีขนาดถูกต้อง`,
+          'success'
+        );
+      }
+    } catch (e: any) {
+      if (userInitiated) {
+        showToast('เกิดข้อผิดพลาดในการตรวจสอบไฟล์', e?.message || 'ไม่สามารถตรวจสอบไฟล์ได้', 'error');
+      }
+    } finally {
+      setIsSyncingFiles(false);
+    }
+  };
+
+  // Auto-sync files status when user returns to window (e.g. from Explorer after deleting/moving files)
+  useEffect(() => {
+    const handleWindowFocus = () => {
+      if (largeFilesRef.current.length > 0 || duplicateGroupsRef.current.length > 0) {
+        handleSyncFileStatus(false);
+      }
+    };
+    window.addEventListener('focus', handleWindowFocus);
+    return () => window.removeEventListener('focus', handleWindowFocus);
+  }, []);
+
+  // Auto-sync files status when switching to storage or dashboard tab
+  useEffect(() => {
+    if (activeTab === 'storage' || activeTab === 'dashboard') {
+      if (largeFilesRef.current.length > 0 || duplicateGroupsRef.current.length > 0) {
+        handleSyncFileStatus(false);
+      }
+    }
+  }, [activeTab]);
+
+  // Delete a specific file from largeFiles or duplicateGroups
+  const handleConfirmDeleteFile = async (permanent = !safeRecycleBin) => {
+    if (!deleteConfirmModal) return;
+    const { file } = deleteConfirmModal;
+    setIsDeletingSpecificFile(true);
+
+    try {
+      const res = await (window as any).electronAPI?.deleteFileItem?.(file.path, !permanent);
+      if (res?.success) {
+        // Remove from largeFiles
+        setLargeFiles((prev) => {
+          const next = prev.filter((f) => f.path.toLowerCase() !== file.path.toLowerCase());
+          updateDirectoryBreakdownFromFiles(next);
+          return next;
+        });
+
+        // Remove from duplicateGroups if applicable
+        setDuplicateGroups((prev) => {
+          return prev
+            .map((g) => ({
+              ...g,
+              copies: g.copies.filter((c: any) => c.path.toLowerCase() !== file.path.toLowerCase())
+            }))
+            .filter((g) => g.copies.length >= 2);
+        });
+
+        // Refresh system drives
+        (window as any).electronAPI?.getSystemDrives?.().then((drives: any[]) => {
+          if (drives && Array.isArray(drives)) setSystemDrives(drives);
+        });
+
+        showToast(
+          'ลบไฟล์สำเร็จ',
+          `${res.message || 'ลบไฟล์เรียบร้อยแล้ว'} (${file.name || file.path})`,
+          'success'
+        );
+        setDeleteConfirmModal(null);
+      } else {
+        showToast(
+          'ไม่สามารถลบไฟล์ได้',
+          res?.error || 'ไฟล์อาจถูกโปรแกรมอื่นล็อกอยู่',
+          'error'
+        );
+      }
+    } catch (err: any) {
+      showToast('เกิดข้อผิดพลาดในการลบไฟล์', err?.message || 'ไม่สามารถลบไฟล์ได้', 'error');
+    } finally {
+      setIsDeletingSpecificFile(false);
+    }
+  };
+
+  // Move a specific file to a chosen directory
+  const handleMoveFile = async (file: any) => {
+    try {
+      const targetDir = await (window as any).electronAPI?.chooseFolder?.();
+      if (!targetDir) return; // user cancelled
+
+      setIsMovingFile(true);
+      const res = await (window as any).electronAPI?.moveFileItem?.(file.path, targetDir);
+
+      if (res?.success) {
+        // Update largeFiles with new path and drive
+        setLargeFiles((prev) => {
+          const next = prev.map((f) => {
+            if (f.path.toLowerCase() === file.path.toLowerCase()) {
+              return {
+                ...f,
+                path: res.newPath,
+                drive: res.newDrive,
+                name: res.fileName || f.name,
+                isRecentlyMoved: true
+              };
+            }
+            return f;
+          });
+          updateDirectoryBreakdownFromFiles(next);
+          return next;
+        });
+
+        // Update duplicate groups if affected
+        setDuplicateGroups((prev) =>
+          prev.map((g) => ({
+            ...g,
+            copies: g.copies.map((c: any) =>
+              c.path.toLowerCase() === file.path.toLowerCase()
+                ? { ...c, path: res.newPath, moved: true }
+                : c
+            )
+          }))
+        );
+
+        // Refresh system drives
+        (window as any).electronAPI?.getSystemDrives?.().then((drives: any[]) => {
+          if (drives && Array.isArray(drives)) setSystemDrives(drives);
+        });
+
+        showToast(
+          'ย้ายไฟล์สำเร็จ',
+          `ย้ายไปยัง "${targetDir}" เรียบร้อยแล้ว (${file.name || res.fileName})`,
+          'success'
+        );
+      } else {
+        showToast('ไม่สามารถย้ายไฟล์ได้', res?.error || 'เกิดข้อผิดพลาดในการย้ายไฟล์', 'error');
+      }
+    } catch (err: any) {
+      showToast('เกิดข้อผิดพลาด', err?.message || 'ไม่สามารถย้ายไฟล์ได้', 'error');
+    } finally {
+      setIsMovingFile(false);
+    }
+  };
+
+  // Delete all duplicate copies in a group except the first original
+  const handleDeleteAllDuplicatesExceptFirst = async (group: any) => {
+    if (!group.copies || group.copies.length <= 1) return;
+    const copiesToDelete = group.copies.slice(1);
+    let successCount = 0;
+
+    for (const copy of copiesToDelete) {
+      try {
+        const res = await (window as any).electronAPI?.deleteFileItem?.(copy.path, safeRecycleBin);
+        if (res?.success) successCount++;
+      } catch (e) {}
+    }
+
+    if (successCount > 0) {
+      const deletedPaths = new Set(copiesToDelete.map((c: any) => c.path.toLowerCase()));
+      // Remove group
+      setDuplicateGroups((prev) => prev.filter((g) => g.id !== group.id));
+      // Remove from largeFiles
+      setLargeFiles((prev) => {
+        const next = prev.filter((f) => !deletedPaths.has(f.path.toLowerCase()));
+        updateDirectoryBreakdownFromFiles(next);
+        return next;
+      });
+      // Refresh system drives
+      (window as any).electronAPI?.getSystemDrives?.().then((d: any) => d && setSystemDrives(d));
+
+      showToast(
+        'ล้างสำเนาซ้ำสำเร็จ',
+        `ลบสำเนาไปแล้ว ${successCount} ไฟล์ และคงไฟล์ต้นฉบับไว้เรียบร้อย`,
+        'success'
+      );
+    }
+  };
+
+  // -------------------------------------------------------------
+  // Custom File Inspection & Batch Selection Handlers (เลือกไฟล์ที่จะตรวจสอบ)
+  // -------------------------------------------------------------
+  const handleChooseAndInspectFiles = async () => {
+    try {
+      setIsInspectingFiles(true);
+      const chosenPaths = await (window as any).electronAPI?.chooseFiles?.();
+      if (!chosenPaths || chosenPaths.length === 0) {
+        setIsInspectingFiles(false);
+        return;
+      }
+      const results = await (window as any).electronAPI?.inspectFiles?.(chosenPaths);
+      if (results && results.length > 0) {
+        setCustomInspectedFiles((prev) => {
+          const map = new Map(prev.map((item) => [item.path.toLowerCase(), item]));
+          for (const r of results) {
+            map.set(r.path.toLowerCase(), r);
+          }
+          return Array.from(map.values());
+        });
+        showToast('ตรวจสอบไฟล์สำเร็จ', `ตรวจสอบข้อมูลและความสมบูรณ์ของ ${results.length} ไฟล์เรียบร้อยแล้ว`, 'success');
+      }
+    } catch (err: any) {
+      showToast('เกิดข้อผิดพลาด', err?.message || 'ไม่สามารถเปิดหน้าต่างเลือกไฟล์ได้', 'error');
+    } finally {
+      setIsInspectingFiles(false);
+    }
+  };
+
+  const handleInspectSingleFile = async (filePath: string) => {
+    try {
+      setIsInspectingFiles(true);
+      const res = await (window as any).electronAPI?.inspectFiles?.([filePath]);
+      if (res && res.length > 0) {
+        setFileInspectDetailModal(res[0]);
+      }
+    } catch (err: any) {
+      showToast('เกิดข้อผิดพลาด', err?.message || 'ไม่สามารถตรวจสอบไฟล์ได้', 'error');
+    } finally {
+      setIsInspectingFiles(false);
+    }
+  };
+
+  const handleReinspectFile = async (fileItem: any) => {
+    try {
+      setIsInspectingFiles(true);
+      const res = await (window as any).electronAPI?.inspectFiles?.([fileItem.path]);
+      if (res && res.length > 0) {
+        setCustomInspectedFiles((prev) =>
+          prev.map((item) => (item.path.toLowerCase() === fileItem.path.toLowerCase() ? res[0] : item))
+        );
+        showToast('อัปเดตไฟล์แล้ว', `สถานะไฟล์ ${fileItem.name} เป็นปัจจุบันแล้ว`, 'info');
+      }
+    } catch (e: any) {
+      showToast('เกิดข้อผิดพลาด', e?.message || 'ไม่สามารถตรวจสอบไฟล์ซ้ำได้', 'error');
+    } finally {
+      setIsInspectingFiles(false);
+    }
+  };
+
+  const handleToggleSelectAllHeavy = () => {
+    if (selectedHeavyFileIds.size > 0 && selectedHeavyFileIds.size === filteredLargeFiles.length) {
+      setSelectedHeavyFileIds(new Set());
+    } else {
+      setSelectedHeavyFileIds(new Set(filteredLargeFiles.map((f) => f.id)));
+    }
+  };
+
+  const handleToggleSelectHeavy = (id: string) => {
+    setSelectedHeavyFileIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBatchInspectSelected = async () => {
+    const selectedFiles = largeFiles.filter((f) => selectedHeavyFileIds.has(f.id));
+    if (selectedFiles.length === 0) return;
+    try {
+      setIsInspectingFiles(true);
+      const paths = selectedFiles.map((f) => f.path);
+      const results = await (window as any).electronAPI?.inspectFiles?.(paths);
+      if (results && results.length > 0) {
+        setCustomInspectedFiles((prev) => {
+          const map = new Map(prev.map((item) => [item.path.toLowerCase(), item]));
+          for (const r of results) {
+            map.set(r.path.toLowerCase(), r);
+          }
+          return Array.from(map.values());
+        });
+        showToast('ตรวจสอบไฟล์ที่เลือกสำเร็จ', `นำข้อมูล ${results.length} ไฟล์เข้าสู่กล่องผลการตรวจสอบพิเศษด้านบนแล้ว`, 'success');
+      }
+    } catch (err: any) {
+      showToast('เกิดข้อผิดพลาด', err?.message || 'ไม่สามารถตรวจสอบไฟล์ได้', 'error');
+    } finally {
+      setIsInspectingFiles(false);
+    }
+  };
+
+  const handleBatchCopyPaths = () => {
+    const selectedFiles = largeFiles.filter((f) => selectedHeavyFileIds.has(f.id));
+    if (selectedFiles.length === 0) return;
+    const paths = selectedFiles.map((f) => f.path).join('\n');
+    handleCopy(paths, 'batch_selected');
+    showToast('คัดลอกตำแหน่งสำเร็จ', `คัดลอกพาธ ${selectedFiles.length} ไฟล์ลงใน Clipboard เรียบร้อย`, 'success');
+  };
+
+  const handleBatchMoveSelected = async () => {
+    const selectedFiles = largeFiles.filter((f) => selectedHeavyFileIds.has(f.id));
+    if (selectedFiles.length === 0) return;
+
+    try {
+      const targetDir = await (window as any).electronAPI?.chooseFolder?.();
+      if (!targetDir) return;
+
+      setIsMovingFile(true);
+      let movedCount = 0;
+      const movedMap = new Map<string, any>();
+
+      for (const file of selectedFiles) {
+        try {
+          const res = await (window as any).electronAPI?.moveFileItem?.(file.path, targetDir);
+          if (res?.success) {
+            movedCount++;
+            movedMap.set(file.path.toLowerCase(), res);
+          }
+        } catch (e) {}
+      }
+
+      if (movedCount > 0) {
+        setLargeFiles((prev) => {
+          const next = prev.map((f) => {
+            const mv = movedMap.get(f.path.toLowerCase());
+            if (mv) {
+              return {
+                ...f,
+                path: mv.newPath,
+                drive: mv.newDrive,
+                name: mv.fileName || f.name,
+                isRecentlyMoved: true
+              };
+            }
+            return f;
+          });
+          updateDirectoryBreakdownFromFiles(next);
+          return next;
+        });
+
+        (window as any).electronAPI?.getSystemDrives?.().then((d: any) => d && setSystemDrives(d));
+        setSelectedHeavyFileIds(new Set());
+        showToast('ย้ายกลุ่มไฟล์สำเร็จ', `ย้ายไฟล์สำเร็จ ${movedCount} จาก ${selectedFiles.length} ไฟล์ไปยัง "${targetDir}"`, 'success');
+      } else {
+        showToast('ไม่สามารถย้ายไฟล์ได้', 'เกิดข้อผิดพลาดหรือไฟล์ถูกล็อกอยู่', 'error');
+      }
+    } catch (e: any) {
+      showToast('เกิดข้อผิดพลาด', e?.message || 'ไม่สามารถย้ายไฟล์ได้', 'error');
+    } finally {
+      setIsMovingFile(false);
+    }
+  };
+
+  const handleBatchDeleteSelected = async (permanent = !safeRecycleBin) => {
+    const selectedFiles = largeFiles.filter((f) => selectedHeavyFileIds.has(f.id));
+    if (selectedFiles.length === 0) return;
+
+    setIsDeletingSpecificFile(true);
+    let deletedCount = 0;
+    const deletedPaths = new Set<string>();
+
+    for (const file of selectedFiles) {
+      try {
+        const res = await (window as any).electronAPI?.deleteFileItem?.(file.path, !permanent);
+        if (res?.success) {
+          deletedCount++;
+          deletedPaths.add(file.path.toLowerCase());
+        }
+      } catch (e) {}
+    }
+
+    if (deletedCount > 0) {
+      setLargeFiles((prev) => {
+        const next = prev.filter((f) => !deletedPaths.has(f.path.toLowerCase()));
+        updateDirectoryBreakdownFromFiles(next);
+        return next;
+      });
+
+      setDuplicateGroups((prev) =>
+        prev
+          .map((g) => ({
+            ...g,
+            copies: g.copies.filter((c: any) => !deletedPaths.has(c.path.toLowerCase()))
+          }))
+          .filter((g) => g.copies.length >= 2)
+      );
+
+      (window as any).electronAPI?.getSystemDrives?.().then((d: any) => d && setSystemDrives(d));
+      setSelectedHeavyFileIds(new Set());
+      showToast('ลบกลุ่มไฟล์สำเร็จ', `ลบไฟล์เรียบร้อยแล้ว ${deletedCount} จาก ${selectedFiles.length} รายการ`, 'success');
+    } else {
+      showToast('ไม่สามารถลบไฟล์ได้', 'ไฟล์อาจถูกล็อกใช้งานอยู่โดยระบบหรือโปรแกรมอื่น', 'error');
+    }
+    setIsDeletingSpecificFile(false);
+  };
+
   // Scan Uninstall Blockers & Background Tasks
   const handleScanBlockers = async (target = blockerSearch) => {
     setIsScanningBlockers(true);
@@ -482,6 +1036,9 @@ export default function App() {
           setRamUsageGB(updatedTele.usedMemGB);
           setTotalRamGB(updatedTele.totalMemGB);
         }
+
+        // 4. Sync files status across app (remove any deleted files from largeFiles and duplicate lists)
+        await handleSyncFileStatus(false);
       }
     } catch (err: any) {
       showToast('เกิดข้อผิดพลาดในการลบ', err?.message || 'ไม่สามารถลบไฟล์บางรายการได้', 'error');
@@ -585,6 +1142,15 @@ export default function App() {
       .sort((a, b) => (storageSortAsc ? a.sizeMB - b.sizeMB : b.sizeMB - a.sizeMB));
   }, [largeFiles, selectedDrive, selectedTreemapBlock, storageSearch, storageSortAsc]);
 
+  // Computed selected heavy files for batch operations
+  const selectedHeavyFiles = useMemo(() => {
+    return largeFiles.filter((f) => selectedHeavyFileIds.has(f.id));
+  }, [largeFiles, selectedHeavyFileIds]);
+
+  const selectedHeavyTotalMB = useMemo(() => {
+    return selectedHeavyFiles.reduce((acc, f) => acc + (f.sizeMB || 0), 0);
+  }, [selectedHeavyFiles]);
+
   // Computed Active Ports Filter
   const filteredPorts = useMemo(() => {
     return ports.filter((p) => {
@@ -607,6 +1173,40 @@ export default function App() {
       return true;
     });
   }, [ports, portFilter, portSearch]);
+
+  // Computed Grouped Ports by Executable File (ให้ย่อพวกไฟล์ไว้ก่อน)
+  const groupedPortsByFile = useMemo(() => {
+    const map = new Map<string, {
+      key: string;
+      processName: string;
+      exePath: string;
+      pid: number;
+      ports: any[];
+      devPortsCount: number;
+      serviceName?: string;
+    }>();
+
+    for (const p of filteredPorts) {
+      const fileKey = p.exePath ? p.exePath.toLowerCase() : `${p.processName.toLowerCase()}_pid_${p.pid}`;
+      if (!map.has(fileKey)) {
+        map.set(fileKey, {
+          key: fileKey,
+          processName: p.processName || 'System',
+          exePath: p.exePath || '',
+          pid: p.pid,
+          ports: [],
+          devPortsCount: 0,
+          serviceName: p.serviceName || ''
+        });
+      }
+      const group = map.get(fileKey)!;
+      group.ports.push(p);
+      if (p.isDevPort) group.devPortsCount++;
+      if (p.serviceName && !group.serviceName) group.serviceName = p.serviceName;
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.ports.length - a.ports.length);
+  }, [filteredPorts]);
 
   // Computed Windows Services Filter
   const filteredServices = useMemo(() => {
@@ -711,9 +1311,9 @@ export default function App() {
             <Zap className="w-4 h-4 text-white" />
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-bold tracking-tight text-sm text-white">SysPulse</span>
+            <span className="font-bold tracking-tight text-sm text-white">SysInfo</span>
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-medium">
-              v0.0.3 • System Storage & Port Inspector
+              v0.1.1 • System Storage & Port Inspector
             </span>
           </div>
           <span className="hidden md:inline-block text-xs text-slate-500 pl-2 border-l border-slate-800">
@@ -1326,19 +1926,39 @@ export default function App() {
                               <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 shrink-0">
                                 {item.category}
                               </span>
+                              {item.isRecentlyMoved && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 shrink-0">
+                                  ย้ายแล้ว
+                                </span>
+                              )}
                             </div>
                             <div className="text-xs text-slate-400 font-mono truncate mt-0.5">{item.path}</div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-sm font-bold text-amber-400 font-mono">
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-sm font-bold text-amber-400 font-mono mr-1">
                               {formatSize(item.sizeMB)}
                             </span>
                             <button
                               onClick={() => handleOpenFolder(item.path)}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
                               title="เปิดโฟลเดอร์ใน Explorer"
                             >
                               <FolderOpen className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleMoveFile(item)}
+                              disabled={isMovingFile}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-sky-600/30 hover:text-sky-300 text-slate-300 transition"
+                              title="ย้ายไฟล์ (Move File)"
+                            >
+                              <FolderInput className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirmModal({ file: item })}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600/30 hover:text-rose-300 text-slate-300 transition"
+                              title="ลบไฟล์นี้ (Delete File)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </div>
@@ -1435,6 +2055,28 @@ export default function App() {
                     </button>
                   ))}
 
+                  {/* Quick Sync Deleted & Moved Files Button */}
+                  <button
+                    onClick={() => handleSyncFileStatus(true)}
+                    disabled={isSyncingFiles}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-200 border border-indigo-500/30 text-xs font-semibold shadow transition"
+                    title="ตรวจสอบและอัปเดตไฟล์ทั้งหมดว่าถูกลบหรือย้ายตำแหน่งแล้วหรือไม่"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-indigo-400 ${isSyncingFiles ? 'animate-spin' : ''}`} />
+                    <span>{isSyncingFiles ? 'กำลังตรวจเช็คไฟล์...' : 'อัปเดตไฟล์ที่ถูกลบ/ย้าย'}</span>
+                  </button>
+
+                  {/* Choose Files to Inspect Button (ให้สามารถเลือกไฟล์ที่จะตรวจสอบได้) */}
+                  <button
+                    onClick={handleChooseAndInspectFiles}
+                    disabled={isInspectingFiles}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-violet-600/20 hover:bg-violet-600/40 text-violet-200 border border-violet-500/30 text-xs font-semibold shadow transition"
+                    title="เลือกไฟล์จากเครื่องคอมพิวเตอร์เพื่อตรวจสอบขนาด ความสมบูรณ์ และการล็อกไฟล์"
+                  >
+                    <FileSearch className={`w-3.5 h-3.5 text-violet-400 ${isInspectingFiles ? 'animate-spin' : ''}`} />
+                    <span>{isInspectingFiles ? 'กำลังตรวจสอบ...' : '📁 เลือกไฟล์เพื่อตรวจสอบ'}</span>
+                  </button>
+
                   <button
                     onClick={() => handleTriggerStorageScan()}
                     className="flex items-center gap-2 px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-600/20 transition"
@@ -1444,6 +2086,181 @@ export default function App() {
                   </button>
                 </div>
               </div>
+
+              {/* Custom Selected Files Inspection Section (เลือกไฟล์เพื่อตรวจสอบ) */}
+              {customInspectedFiles.length > 0 && (
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-violet-950/20 to-slate-900 border border-violet-500/40 space-y-4 shadow-xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <FileSearch className="w-4 h-4 text-violet-400" />
+                        <h3 className="text-sm font-bold text-white">
+                          รายการไฟล์ที่เลือกตรวจสอบเฉพาะเจาะจง ({customInspectedFiles.length} รายการ)
+                        </h3>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 font-semibold border border-violet-500/30">
+                          File Inspector Active
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        วิเคราะห์ขนาดจริง, วันที่แก้ไข, การมีอยู่, และสถานะการล็อก/ใช้งานโดยโปรเซสอื่น
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        onClick={handleChooseAndInspectFiles}
+                        disabled={isInspectingFiles}
+                        className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold shadow transition flex items-center gap-1.5"
+                      >
+                        <FileSearch className="w-3.5 h-3.5" />
+                        <span>➕ เลือกไฟล์เพิ่ม</span>
+                      </button>
+                      <button
+                        onClick={() => setCustomInspectedFiles([])}
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 transition"
+                      >
+                        ล้างรายการ
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                    {customInspectedFiles.map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 hover:border-violet-500/40 transition flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-white max-w-sm truncate" title={item.name}>
+                              {item.name}
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
+                              {item.category}
+                            </span>
+                            {item.status === 'normal' && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">
+                                ✓ พร้อมใช้งาน (ปกติ)
+                              </span>
+                            )}
+                            {item.status === 'locked' && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold">
+                                ⚠ ถูกล็อก/ใช้งานอยู่ ({item.lockedBy?.[0]?.processName || 'In-Use'})
+                              </span>
+                            )}
+                            {item.status === 'deleted' && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold">
+                                ✕ ไม่พบไฟล์ (ถูกลบหรือย้าย)
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-mono truncate max-w-xl" title={item.path}>
+                            {item.path}
+                          </div>
+                          <div className="text-[10px] text-slate-500 flex items-center gap-3">
+                            <span>แก้ไข: {item.lastModified}</span>
+                            <span>•</span>
+                            <span>สร้าง: {item.createdDate}</span>
+                            <span>•</span>
+                            <span>ไดรฟ์: {item.drive}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="text-right">
+                            <div className="font-mono font-bold text-amber-400 text-sm">{item.formattedSize}</div>
+                            {item.sizeBytes > 0 && (
+                              <div className="text-[10px] text-slate-500 font-mono">({item.sizeBytes.toLocaleString()} B)</div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => setFileInspectDetailModal(item)}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-violet-600/30 hover:text-violet-300 text-slate-300 transition"
+                              title="ดูข้อมูลเชิงลึกและการล็อกไฟล์"
+                            >
+                              <Search className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleOpenFolder(item.path)}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                              title="เปิดโฟลเดอร์ใน Explorer"
+                            >
+                              <FolderOpen className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleCopy(item.path, item.id)}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                              title="คัดลอกตำแหน่งไฟล์"
+                            >
+                              {copiedId === item.id ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleReinspectFile(item)}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                              title="ตรวจสอบไฟล์นี้ซ้ำ (Re-inspect)"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                            </button>
+                            {item.exists && (
+                              <>
+                                <button
+                                  onClick={() => handleMoveFile({ path: item.path, name: item.name, sizeMB: item.sizeMB })}
+                                  disabled={isMovingFile}
+                                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-sky-600/30 hover:text-sky-300 text-slate-300 transition"
+                                  title="ย้ายไฟล์ (Move File)"
+                                >
+                                  <FolderInput className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirmModal({ file: { path: item.path, name: item.name, sizeMB: item.sizeMB } })}
+                                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600/30 hover:text-rose-300 text-slate-300 transition"
+                                  title="ลบไฟล์นี้ (Delete File)"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                            <button
+                              onClick={() => setCustomInspectedFiles((prev) => prev.filter((x) => x.id !== item.id))}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition"
+                              title="เอาออกจากรายการตรวจนี้"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Real-time File Sync Status Banner */}
+              {fileSyncStats && (
+                <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-slate-300">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>ระบบตรวจสอบไฟล์ล่าสุด ({fileSyncStats.lastSyncTime}):</span>
+                  {fileSyncStats.deletedCount > 0 && (
+                    <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold">
+                      ไฟล์ถูกลบ {fileSyncStats.deletedCount} รายการ (คืนพื้นที่ {formatSize(fileSyncStats.reclaimedMB)})
+                    </span>
+                  )}
+                  {fileSyncStats.movedCount > 0 && (
+                    <span className="px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold">
+                      ตรวจพบไฟล์ถูกย้าย {fileSyncStats.movedCount} รายการ (อัปเดตตำแหน่งใหม่แล้ว)
+                    </span>
+                  )}
+                  {fileSyncStats.deletedCount === 0 && fileSyncStats.movedCount === 0 && (
+                    <span className="text-slate-400">ทุกไฟล์ในรายการยังอยู่ที่เดิมและมีขนาดถูกต้อง</span>
+                  )}
+                </div>
+              )}
 
               {/* Scanning Progress Bar */}
               {isScanningStorage && (
@@ -1588,74 +2405,188 @@ export default function App() {
 
               {/* Sub-tab 1: Heavy Files Table */}
               {storageSubTab === 'heavy' && (
-                <div className="rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-800 bg-slate-950/60 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                          <th className="py-3 px-4">ชื่อไฟล์</th>
-                          <th className="py-3 px-4">หมวดหมู่</th>
-                          <th className="py-3 px-4">ไดรฟ์</th>
-                          <th className="py-3 px-4 text-right">ขนาดไฟล์</th>
-                          <th className="py-3 px-4">แก้ไขล่าสุด</th>
-                          <th className="py-3 px-4 text-center">จัดการ</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/60 text-xs">
-                        {filteredLargeFiles.length === 0 ? (
-                          <tr>
-                            <td colSpan={6} className="py-8 text-center text-slate-500">
-                              {isScanningStorage ? 'กำลังสแกนไฟล์บนไดรฟ์...' : 'ไม่พบไฟล์ตามเงื่อนไขที่เลือก'}
-                            </td>
+                <div className="space-y-3">
+                  {/* Batch Selection Action Bar (เมื่อมีการเลือกไฟล์) */}
+                  {selectedHeavyFileIds.size > 0 && (
+                    <div className="p-3 bg-indigo-950/90 border border-indigo-500/50 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs shadow-xl backdrop-blur animate-fade-in">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-bold font-mono">
+                          เลือกแล้ว {selectedHeavyFileIds.size} ไฟล์
+                        </span>
+                        <span className="text-slate-300">
+                          (รวมขนาด: <b className="text-amber-400 font-mono">{formatSize(selectedHeavyTotalMB)}</b>)
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          onClick={handleBatchInspectSelected}
+                          disabled={isInspectingFiles}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold shadow transition"
+                          title="ส่งไฟล์ที่เลือกไปตรวจสอบความสมบูรณ์และการล็อกเชิงลึก"
+                        >
+                          <FileSearch className="w-3.5 h-3.5" />
+                          <span>⚡ ตรวจสอบไฟล์ที่เลือก</span>
+                        </button>
+                        <button
+                          onClick={handleBatchMoveSelected}
+                          disabled={isMovingFile}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-semibold shadow transition"
+                          title="ย้ายไฟล์ที่เลือกทั้งหมดไปยังโฟลเดอร์อื่น"
+                        >
+                          <FolderInput className="w-3.5 h-3.5" />
+                          <span>ย้ายไฟล์ที่เลือก</span>
+                        </button>
+                        <button
+                          onClick={() => handleBatchDeleteSelected(!safeRecycleBin)}
+                          disabled={isDeletingSpecificFile}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold shadow transition"
+                          title="ลบไฟล์ที่เลือกทั้งหมด"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>ลบไฟล์ที่เลือก</span>
+                        </button>
+                        <button
+                          onClick={handleBatchCopyPaths}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+                          title="คัดลอกตำแหน่งไฟล์ทั้งหมดที่เลือก"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>คัดลอกพาธ</span>
+                        </button>
+                        <button
+                          onClick={() => setSelectedHeavyFileIds(new Set())}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-slate-400 hover:text-white transition"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>ยกเลิก</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 bg-slate-950/60 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                            <th className="py-3 px-3 w-10 text-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedHeavyFileIds.size > 0 && selectedHeavyFileIds.size === filteredLargeFiles.length}
+                                onChange={handleToggleSelectAllHeavy}
+                                className="rounded accent-indigo-600 cursor-pointer w-3.5 h-3.5"
+                                title="เลือก/ยกเลิกทั้งหมด"
+                              />
+                            </th>
+                            <th className="py-3 px-4">ชื่อไฟล์</th>
+                            <th className="py-3 px-4">หมวดหมู่</th>
+                            <th className="py-3 px-4">ไดรฟ์</th>
+                            <th className="py-3 px-4 text-right">ขนาดไฟล์</th>
+                            <th className="py-3 px-4">แก้ไขล่าสุด</th>
+                            <th className="py-3 px-4 text-center">จัดการ</th>
                           </tr>
-                        ) : (
-                          filteredLargeFiles.map((file) => (
-                            <tr key={file.id} className="hover:bg-slate-800/30 transition">
-                              <td className="py-3 px-4">
-                                <div className="font-semibold text-slate-100 max-w-sm truncate" title={file.name}>
-                                  {file.name}
-                                </div>
-                                <div className="text-[11px] text-slate-400 font-mono truncate max-w-md" title={file.path}>
-                                  {file.path}
-                                </div>
-                              </td>
-                              <td className="py-3 px-4">
-                                <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[11px]">
-                                  {file.category}
-                                </span>
-                              </td>
-                              <td className="py-3 px-4 font-mono font-bold text-indigo-400">{file.drive}</td>
-                              <td className="py-3 px-4 text-right font-mono font-bold text-amber-400 text-sm">
-                                {formatSize(file.sizeMB)}
-                              </td>
-                              <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">{file.lastModified}</td>
-                              <td className="py-3 px-4 text-center">
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <button
-                                    onClick={() => handleOpenFolder(file.path)}
-                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
-                                    title="เปิดโฟลเดอร์ใน Windows Explorer"
-                                  >
-                                    <FolderOpen className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleCopy(file.path, file.id)}
-                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
-                                    title="คัดลอกตำแหน่งไฟล์"
-                                  >
-                                    {copiedId === file.id ? (
-                                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                    ) : (
-                                      <Copy className="w-3.5 h-3.5" />
-                                    )}
-                                  </button>
-                                </div>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 text-xs">
+                          {filteredLargeFiles.length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="py-8 text-center text-slate-500">
+                                {isScanningStorage ? 'กำลังสแกนไฟล์บนไดรฟ์...' : 'ไม่พบไฟล์ตามเงื่อนไขที่เลือก'}
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                          ) : (
+                            filteredLargeFiles.map((file) => {
+                              const isChecked = selectedHeavyFileIds.has(file.id);
+                              return (
+                                <tr
+                                  key={file.id}
+                                  className={`hover:bg-slate-800/30 transition ${
+                                    isChecked ? 'bg-indigo-950/30' : ''
+                                  }`}
+                                >
+                                  <td className="py-3 px-3 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => handleToggleSelectHeavy(file.id)}
+                                      className="rounded accent-indigo-600 cursor-pointer w-3.5 h-3.5"
+                                    />
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-slate-100 max-w-sm truncate" title={file.name}>
+                                        {file.name}
+                                      </span>
+                                      {file.isRecentlyMoved && (
+                                        <span className="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 text-[10px] flex items-center gap-1 font-sans shrink-0">
+                                          <ExternalLink className="w-2.5 h-2.5" /> ย้ายตำแหน่งแล้ว
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] text-slate-400 font-mono truncate max-w-md" title={file.path}>
+                                      {file.path}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[11px]">
+                                      {file.category}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 font-mono font-bold text-indigo-400">{file.drive}</td>
+                                  <td className="py-3 px-4 text-right font-mono font-bold text-amber-400 text-sm">
+                                    {formatSize(file.sizeMB)}
+                                  </td>
+                                  <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">{file.lastModified}</td>
+                                  <td className="py-3 px-4 text-center">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <button
+                                        onClick={() => handleInspectSingleFile(file.path)}
+                                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-violet-600/30 hover:text-violet-300 text-slate-300 transition"
+                                        title="ตรวจสอบไฟล์นี้เชิงลึก (Inspect File Details & Lock Status)"
+                                      >
+                                        <Search className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleOpenFolder(file.path)}
+                                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                                        title="เปิดโฟลเดอร์ใน Windows Explorer"
+                                      >
+                                        <FolderOpen className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleCopy(file.path, file.id)}
+                                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                                        title="คัดลอกตำแหน่งไฟล์"
+                                      >
+                                        {copiedId === file.id ? (
+                                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                        ) : (
+                                          <Copy className="w-3.5 h-3.5" />
+                                        )}
+                                      </button>
+                                      <button
+                                        onClick={() => handleMoveFile(file)}
+                                        disabled={isMovingFile}
+                                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-sky-600/30 hover:text-sky-300 text-slate-300 transition"
+                                        title="ย้ายไฟล์ไปยังโฟลเดอร์อื่น (Move File)"
+                                      >
+                                        <FolderInput className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => setDeleteConfirmModal({ file })}
+                                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600/30 hover:text-rose-300 text-slate-300 transition"
+                                        title="ลบไฟล์นี้ (Delete File)"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1681,14 +2612,22 @@ export default function App() {
                   ) : (
                     duplicateGroups.map((group) => (
                       <div key={group.id} className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-white text-sm">{group.name}</span>
                             <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">
                               {formatSize(group.sizeEachMB)} / ไฟล์
                             </span>
+                            <span className="text-xs text-slate-400">({group.copies?.length} สำเนา)</span>
                           </div>
-                          <span className="text-xs text-slate-400">{group.copies?.length} สำเนา</span>
+                          <button
+                            onClick={() => handleDeleteAllDuplicatesExceptFirst(group)}
+                            className="self-start sm:self-auto text-xs px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 flex items-center gap-1.5 font-semibold transition"
+                            title="ลบสำเนาซ้ำทั้งหมดออก โดยจะคงไฟล์แรก (ต้นฉบับ) ไว้เสมอ"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>ลบสำเนาทั้งหมด (เหลือไฟล์แรกไว้)</span>
+                          </button>
                         </div>
                         <div className="space-y-2 pt-2 border-t border-slate-800">
                           {group.copies?.map((copy: any, cIdx: number) => (
@@ -1696,15 +2635,57 @@ export default function App() {
                               key={cIdx}
                               className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between gap-3 text-xs"
                             >
-                              <div className="font-mono text-slate-300 truncate flex-1">{copy.path}</div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className="text-slate-500 font-mono">{copy.date}</span>
+                              <div className="flex items-center gap-2 truncate flex-1">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono shrink-0 ${cIdx === 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>
+                                  {cIdx === 0 ? 'ต้นฉบับ' : `สำเนา #${cIdx}`}
+                                </span>
+                                <div className="font-mono text-slate-300 truncate" title={copy.path}>
+                                  {copy.path}
+                                </div>
+                                {copy.moved && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 shrink-0">
+                                    ย้ายแล้ว
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="text-slate-500 font-mono text-[11px] mr-1">{copy.date}</span>
                                 <button
                                   onClick={() => handleOpenFolder(copy.path)}
-                                  className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
                                   title="เปิดใน Explorer"
                                 >
                                   <FolderOpen className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleCopy(copy.path, `${group.id}_${cIdx}`)}
+                                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                                  title="คัดลอกตำแหน่งไฟล์"
+                                >
+                                  {copiedId === `${group.id}_${cIdx}` ? (
+                                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => handleMoveFile({ path: copy.path, name: group.name, sizeMB: group.sizeEachMB })}
+                                  disabled={isMovingFile}
+                                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-sky-600/30 hover:text-sky-300 text-slate-300 transition"
+                                  title="ย้ายสำเนานี้ (Move File)"
+                                >
+                                  <FolderInput className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirmModal({
+                                    file: { path: copy.path, name: group.name, sizeMB: group.sizeEachMB },
+                                    isDuplicateCopy: true,
+                                    groupId: group.id
+                                  })}
+                                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600/30 hover:text-rose-300 text-slate-300 transition"
+                                  title="ลบสำเนานี้ (Delete Copy)"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             </div>
@@ -2104,98 +3085,302 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Ports Table */}
-                  <div className="rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="border-b border-slate-800 bg-slate-950/60 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                            <th className="py-3 px-4">พอร์ต & โปรโตคอล</th>
-                            <th className="py-3 px-4">โปรเซส / PID</th>
-                            <th className="py-3 px-4">บริการ Windows (Service)</th>
-                            <th className="py-3 px-4">ที่อยู่ (Local Address)</th>
-                            <th className="py-3 px-4">พาธโปรแกรม</th>
-                            <th className="py-3 px-4 text-center">จัดการ</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800/60 text-xs">
-                          {filteredPorts.length === 0 ? (
-                            <tr>
-                              <td colSpan={6} className="py-8 text-center text-slate-500">
-                                ไม่พบพอร์ตตามเงื่อนไขที่เลือก
-                              </td>
-                            </tr>
-                          ) : (
-                            filteredPorts.map((item) => (
-                              <tr key={item.id} className="hover:bg-slate-800/30 transition">
-                                <td className="py-3 px-4">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono font-bold text-sm text-indigo-400">
-                                      {item.port}
-                                    </span>
-                                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
-                                      {item.protocol}
-                                    </span>
-                                    {item.isDevPort && (
-                                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                                        Dev
-                                      </span>
+                  {/* View Mode Toggle & Collapse Controls (ให้ย่อพวกไฟล์ไว้ก่อน) */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/90 p-3 rounded-2xl border border-slate-800 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400 font-medium">มุมมองแสดงผล:</span>
+                      <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1">
+                        <button
+                          onClick={() => setPortViewMode('grouped_by_file')}
+                          className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                            portViewMode === 'grouped_by_file'
+                              ? 'bg-indigo-600 text-white shadow'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <Layers className="w-3.5 h-3.5" />
+                          <span>📂 จัดกลุ่มตามไฟล์โปรแกรม (ย่อไว้ก่อน)</span>
+                        </button>
+                        <button
+                          onClick={() => setPortViewMode('flat')}
+                          className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                            portViewMode === 'flat'
+                              ? 'bg-indigo-600 text-white shadow'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <Filter className="w-3.5 h-3.5" />
+                          <span>📋 รายการตารางพอร์ตทั้งหมด</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {portViewMode === 'grouped_by_file' && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400 text-[11px]">
+                          ({groupedPortsByFile.length} กลุ่มโปรแกรมไฟล์)
+                        </span>
+                        <button
+                          onClick={() => setExpandedPortFiles({})}
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 transition"
+                          title="ย่อไฟล์ทั้งหมดเข้าด้วยกัน (Collapse All)"
+                        >
+                          ย่อไฟล์ทั้งหมด
+                        </button>
+                        <button
+                          onClick={() => {
+                            const all: any = {};
+                            groupedPortsByFile.forEach((g) => (all[g.key] = true));
+                            setExpandedPortFiles(all);
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 transition"
+                          title="ขยายทุกไฟล์เพื่อดูรายละเอียดพอร์ต (Expand All)"
+                        >
+                          ขยายไฟล์ทั้งหมด
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Mode 1: Grouped by File View (ย่อพวกไฟล์ไว้ก่อนตามค่าเริ่มต้น) */}
+                  {portViewMode === 'grouped_by_file' && (
+                    <div className="space-y-2.5">
+                      {groupedPortsByFile.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500 bg-slate-900/60 rounded-2xl border border-slate-800">
+                          ไม่พบพอร์ตตามเงื่อนไขที่เลือก
+                        </div>
+                      ) : (
+                        groupedPortsByFile.map((group) => {
+                          const isExpanded = !!expandedPortFiles[group.key];
+                          return (
+                            <div
+                              key={group.key}
+                              className="rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden transition-all"
+                            >
+                              {/* File Accordion Header - COLLAPSED BY DEFAULT (ย่อไว้ก่อน) */}
+                              <div
+                                onClick={() =>
+                                  setExpandedPortFiles((prev) => ({
+                                    ...prev,
+                                    [group.key]: !prev[group.key]
+                                  }))
+                                }
+                                className="p-3.5 bg-gradient-to-r from-slate-900 via-slate-900/95 to-slate-950 flex flex-col md:flex-row md:items-center justify-between gap-3 cursor-pointer hover:bg-slate-800/40 select-none transition"
+                              >
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  <div className="text-slate-400 shrink-0">
+                                    {isExpanded ? (
+                                      <ChevronDown className="w-4 h-4 text-indigo-400" />
+                                    ) : (
+                                      <ChevronRight className="w-4 h-4 text-slate-500" />
                                     )}
                                   </div>
-                                </td>
-                                <td className="py-3 px-4">
-                                  <div className="font-semibold text-slate-200">{item.processName}</div>
-                                  <div className="text-[11px] text-slate-400 font-mono">PID: {item.pid}</div>
-                                </td>
-                                <td className="py-3 px-4">
-                                  {item.serviceName ? (
-                                    <div>
-                                      <span className="px-2 py-0.5 rounded bg-violet-500/20 text-violet-300 font-semibold font-mono text-[11px] border border-violet-500/30">
-                                        {item.serviceName}
+                                  <div className="min-w-0 flex-1 space-y-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-bold text-white text-sm font-mono">
+                                        {group.processName}
                                       </span>
-                                      <div className="text-[11px] text-slate-400 mt-0.5 truncate max-w-xs">
-                                        {item.serviceDisplayName}
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <span className="text-[11px] text-slate-500">ไม่ใช่ Service (App ทั่วไป)</span>
-                                  )}
-                                </td>
-                                <td className="py-3 px-4 font-mono text-[11px] text-slate-300">{item.localAddress}</td>
-                                <td className="py-3 px-4">
-                                  <div className="text-[11px] text-slate-400 font-mono truncate max-w-xs" title={item.exePath}>
-                                    {item.exePath}
-                                  </div>
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                  <div className="flex items-center justify-center gap-1.5">
-                                    <button
-                                      onClick={() => handleCopy(item.port.toString(), item.id)}
-                                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
-                                      title="คัดลอกหมายเลขพอร์ต"
-                                    >
-                                      {copiedId === item.id ? (
-                                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                      ) : (
-                                        <Copy className="w-3.5 h-3.5" />
+                                      <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
+                                        PID: {group.pid}
+                                      </span>
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
+                                        {group.ports.length} พอร์ตเปิดใช้งาน
+                                      </span>
+                                      {group.devPortsCount > 0 && (
+                                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                          Dev Port ({group.devPortsCount})
+                                        </span>
                                       )}
-                                    </button>
-                                    <button
-                                      onClick={() => handleKillProcess(item.pid, item.processName)}
-                                      className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold text-[11px] transition"
-                                      title="ปิดโปรเซสทันทีเพื่อคืนพอร์ต"
-                                    >
-                                      Kill PID
-                                    </button>
+                                      {group.serviceName && (
+                                        <span className="text-[10px] px-2 py-0.5 rounded bg-violet-500/20 text-violet-300 font-mono border border-violet-500/30">
+                                          Service: {group.serviceName}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] text-slate-400 font-mono truncate max-w-xl" title={group.exePath}>
+                                      {group.exePath || '<ไม่มีพาธระบุ / โปรเซสของระบบ>'}
+                                    </div>
                                   </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                  {group.exePath && (
+                                    <button
+                                      onClick={() => handleOpenFolder(group.exePath)}
+                                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                                      title="เปิดโฟลเดอร์ใน Windows Explorer"
+                                    >
+                                      <FolderOpen className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleKillProcess(group.pid, group.processName)}
+                                    className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold text-[11px] transition"
+                                    title="ปิดโปรเซสนี้ทันทีเพื่อคืนพอร์ต"
+                                  >
+                                    Kill PID
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Expanded Ports Table for this file */}
+                              {isExpanded && (
+                                <div className="border-t border-slate-800/80 bg-slate-950/70 p-3">
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse text-xs">
+                                      <thead>
+                                        <tr className="border-b border-slate-800/60 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                                          <th className="py-2 px-3">พอร์ต & โปรโตคอล</th>
+                                          <th className="py-2 px-3">ที่อยู่ (Local Address)</th>
+                                          <th className="py-2 px-3">คำอธิบาย</th>
+                                          <th className="py-2 px-3 text-center">จัดการ</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-800/40">
+                                        {group.ports.map((item) => (
+                                          <tr key={item.id} className="hover:bg-slate-800/20 transition">
+                                            <td className="py-2 px-3">
+                                              <div className="flex items-center gap-2">
+                                                <span className="font-mono font-bold text-sm text-indigo-400">
+                                                  {item.port}
+                                                </span>
+                                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
+                                                  {item.protocol}
+                                                </span>
+                                                {item.isDevPort && (
+                                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                                    Dev Port
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </td>
+                                            <td className="py-2 px-3 font-mono text-slate-300">{item.localAddress}</td>
+                                            <td className="py-2 px-3 text-slate-400 text-[11px]">
+                                              {item.description || item.serviceDisplayName || '-'}
+                                            </td>
+                                            <td className="py-2 px-3 text-center">
+                                              <div className="flex items-center justify-center gap-1.5">
+                                                <button
+                                                  onClick={() => handleCopy(item.port.toString(), item.id)}
+                                                  className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300"
+                                                  title="คัดลอกหมายเลขพอร์ต"
+                                                >
+                                                  {copiedId === item.id ? (
+                                                    <Check className="w-3 h-3 text-emerald-400" />
+                                                  ) : (
+                                                    <Copy className="w-3 h-3" />
+                                                  )}
+                                                </button>
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+
+                  {/* Mode 2: Flat Ports Table View */}
+                  {portViewMode === 'flat' && (
+                    <div className="rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-slate-800 bg-slate-950/60 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                              <th className="py-3 px-4">พอร์ต & โปรโตคอล</th>
+                              <th className="py-3 px-4">โปรเซส / PID</th>
+                              <th className="py-3 px-4">บริการ Windows (Service)</th>
+                              <th className="py-3 px-4">ที่อยู่ (Local Address)</th>
+                              <th className="py-3 px-4">พาธโปรแกรม</th>
+                              <th className="py-3 px-4 text-center">จัดการ</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/60 text-xs">
+                            {filteredPorts.length === 0 ? (
+                              <tr>
+                                <td colSpan={6} className="py-8 text-center text-slate-500">
+                                  ไม่พบพอร์ตตามเงื่อนไขที่เลือก
                                 </td>
                               </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
+                            ) : (
+                              filteredPorts.map((item) => (
+                                <tr key={item.id} className="hover:bg-slate-800/30 transition">
+                                  <td className="py-3 px-4">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-mono font-bold text-sm text-indigo-400">
+                                        {item.port}
+                                      </span>
+                                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
+                                        {item.protocol}
+                                      </span>
+                                      {item.isDevPort && (
+                                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                          Dev
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <div className="font-semibold text-slate-200">{item.processName}</div>
+                                    <div className="text-[11px] text-slate-400 font-mono">PID: {item.pid}</div>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    {item.serviceName ? (
+                                      <div>
+                                        <span className="px-2 py-0.5 rounded bg-violet-500/20 text-violet-300 font-semibold font-mono text-[11px] border border-violet-500/30">
+                                          {item.serviceName}
+                                        </span>
+                                        <div className="text-[11px] text-slate-400 mt-0.5 truncate max-w-xs">
+                                          {item.serviceDisplayName}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <span className="text-[11px] text-slate-500">ไม่ใช่ Service (App ทั่วไป)</span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-4 font-mono text-[11px] text-slate-300">{item.localAddress}</td>
+                                  <td className="py-3 px-4">
+                                    <div className="text-[11px] text-slate-400 font-mono truncate max-w-xs" title={item.exePath}>
+                                      {item.exePath}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4 text-center">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <button
+                                        onClick={() => handleCopy(item.port.toString(), item.id)}
+                                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                                        title="คัดลอกหมายเลขพอร์ต"
+                                      >
+                                        {copiedId === item.id ? (
+                                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                        ) : (
+                                          <Copy className="w-3.5 h-3.5" />
+                                        )}
+                                      </button>
+                                      <button
+                                        onClick={() => handleKillProcess(item.pid, item.processName)}
+                                        className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold text-[11px] transition"
+                                        title="ปิดโปรเซสทันทีเพื่อคืนพอร์ต"
+                                      >
+                                        Kill PID
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
 
@@ -3210,7 +4395,7 @@ export default function App() {
                     </div>
                     <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 text-slate-200">
                       <p className="font-medium">
-                        SysPulse System Inspector: ตรวจสอบพอร์ตเชื่อมต่อ 127.0.0.1:8080 (PID 4920) ใช้งาน RAM 2.45 GB
+                        SysInfo System Inspector: ตรวจสอบพอร์ตเชื่อมต่อ 127.0.0.1:8080 (PID 4920) ใช้งาน RAM 2.45 GB
                       </p>
                       <p className="text-xs text-slate-400 mt-1">
                         The quick brown fox jumps over the lazy dog. 0123456789 (พร้อมรองรับการแสดงผลทุกระดับสายตา)
@@ -3515,6 +4700,236 @@ export default function App() {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for File Deletion */}
+      {deleteConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-md p-6 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">ยืนยันการลบไฟล์</h3>
+                <p className="text-xs text-slate-400">
+                  {deleteConfirmModal.isDuplicateCopy
+                    ? 'ลบสำเนาซ้ำรายการนี้ออกจากระบบ'
+                    : 'ลบไฟล์ขนาดใหญ่รายการนี้ออกจากระบบเพื่อคืนพื้นที่'}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5 text-xs">
+              <div className="flex items-center justify-between text-slate-300">
+                <span className="font-semibold text-white truncate max-w-[260px]">
+                  {deleteConfirmModal.file.name || deleteConfirmModal.file.path.split(/[\\/]/).pop()}
+                </span>
+                {deleteConfirmModal.file.sizeMB && (
+                  <span className="font-bold text-amber-400 font-mono">
+                    {formatSize(deleteConfirmModal.file.sizeMB)}
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] font-mono text-slate-400 break-all">
+                {deleteConfirmModal.file.path}
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-950/50 border border-slate-800/80">
+              <label className="flex items-center gap-2.5 text-xs text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={safeRecycleBin}
+                  onChange={(e) => setSafeRecycleBin(e.target.checked)}
+                  className="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0"
+                />
+                <span>Safe Delete (ย้ายลงถังขยะ Recycle Bin สามารถกู้คืนได้)</span>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                onClick={() => setDeleteConfirmModal(null)}
+                disabled={isDeletingSpecificFile}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={() => handleConfirmDeleteFile(!safeRecycleBin)}
+                disabled={isDeletingSpecificFile}
+                className="flex items-center gap-2 px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-rose-600/30 transition"
+              >
+                <Trash2 className={`w-3.5 h-3.5 ${isDeletingSpecificFile ? 'animate-spin' : ''}`} />
+                <span>
+                  {isDeletingSpecificFile
+                    ? 'กำลังลบไฟล์...'
+                    : safeRecycleBin
+                    ? 'ย้ายลงถังขยะ'
+                    : 'ลบถาวรทันที'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Deep File Inspection Modal (รายละเอียดและการล็อกไฟล์เชิงลึก) */}
+      {fileInspectDetailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-lg p-6 rounded-2xl bg-slate-900 border border-violet-500/40 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-xl bg-violet-500/20 text-violet-400 border border-violet-500/30">
+                  <FileSearch className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">ข้อมูลเชิงลึกและการตรวจสอบไฟล์</h3>
+                  <p className="text-xs text-slate-400">Deep File Inspection Report & Process Locks</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setFileInspectDetailModal(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+                <div className="text-[11px] font-semibold text-slate-400">ชื่อไฟล์ & ตำแหน่ง (File Path):</div>
+                <div className="font-bold text-white break-all">{fileInspectDetailModal.name}</div>
+                <div className="font-mono text-[11px] text-slate-400 break-all select-all">{fileInspectDetailModal.path}</div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                  <div className="text-[10px] text-slate-500">ขนาดไฟล์จริง:</div>
+                  <div className="font-mono font-bold text-sm text-amber-400 mt-0.5">
+                    {fileInspectDetailModal.formattedSize || formatSize(fileInspectDetailModal.sizeMB || 0)}
+                  </div>
+                  {fileInspectDetailModal.sizeBytes > 0 && (
+                    <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                      {fileInspectDetailModal.sizeBytes.toLocaleString()} Bytes
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                  <div className="text-[10px] text-slate-500">หมวดหมู่ไฟล์:</div>
+                  <div className="font-semibold text-slate-200 mt-0.5">{fileInspectDetailModal.category || 'ไฟล์ทั่วไป'}</div>
+                  <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                    นามสกุล: {fileInspectDetailModal.extension || '-'} (ไดรฟ์ {fileInspectDetailModal.drive})
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
+                <div className="text-[10px] text-slate-500">วันที่สร้างและแก้ไขล่าสุด:</div>
+                <div className="text-slate-300">แก้ไขล่าสุด: <span className="font-mono">{fileInspectDetailModal.lastModified || '-'}</span></div>
+                {fileInspectDetailModal.createdDate && (
+                  <div className="text-slate-400 text-[11px]">วันที่สร้างไฟล์: <span className="font-mono">{fileInspectDetailModal.createdDate}</span></div>
+                )}
+              </div>
+
+              {/* Status & Locks */}
+              <div className={`p-3 rounded-xl border space-y-2 ${
+                fileInspectDetailModal.isLocked
+                  ? 'bg-amber-950/30 border-amber-500/40'
+                  : !fileInspectDetailModal.exists
+                  ? 'bg-rose-950/30 border-rose-500/40'
+                  : 'bg-emerald-950/20 border-emerald-500/30'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold flex items-center gap-1.5">
+                    {fileInspectDetailModal.isLocked ? (
+                      <AlertTriangle className="w-4 h-4 text-amber-400" />
+                    ) : !fileInspectDetailModal.exists ? (
+                      <X className="w-4 h-4 text-rose-400" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    )}
+                    <span className={fileInspectDetailModal.isLocked ? 'text-amber-300' : !fileInspectDetailModal.exists ? 'text-rose-300' : 'text-emerald-300'}>
+                      {fileInspectDetailModal.statusText || (fileInspectDetailModal.isLocked ? 'ไฟล์ถูกล็อกใช้งานอยู่' : 'ไฟล์ปกติ พร้อมจัดการ')}
+                    </span>
+                  </span>
+                </div>
+
+                {fileInspectDetailModal.lockedBy && fileInspectDetailModal.lockedBy.length > 0 && (
+                  <div className="pt-2 border-t border-slate-800/80 space-y-1">
+                    <div className="text-[11px] font-semibold text-slate-300">
+                      โปรเซสที่กำลังเปิดใช้งาน/ล็อกไฟล์นี้อยู่ ({fileInspectDetailModal.lockedBy.length} โปรเซส):
+                    </div>
+                    {fileInspectDetailModal.lockedBy.map((p: any, pIdx: number) => (
+                      <div key={pIdx} className="p-2 rounded-lg bg-slate-900 flex items-center justify-between text-xs">
+                        <span className="font-mono text-white font-bold">{p.processName} (PID: {p.pid})</span>
+                        <button
+                          onClick={() => handleKillProcess(p.pid, p.processName)}
+                          className="px-2 py-0.5 rounded bg-rose-600/30 hover:bg-rose-600/60 text-rose-200 border border-rose-500/30 text-[10px]"
+                        >
+                          Kill PID
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-800">
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => handleOpenFolder(fileInspectDetailModal.path)}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1 transition"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  <span>เปิดโฟลเดอร์</span>
+                </button>
+                <button
+                  onClick={() => handleCopy(fileInspectDetailModal.path, 'inspect_modal')}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1 transition"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>คัดลอกพาธ</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {fileInspectDetailModal.exists && (
+                  <>
+                    <button
+                      onClick={() => {
+                        handleMoveFile(fileInspectDetailModal);
+                        setFileInspectDetailModal(null);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold flex items-center gap-1 transition"
+                    >
+                      <FolderInput className="w-3.5 h-3.5" />
+                      <span>ย้ายไฟล์</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDeleteConfirmModal({ file: fileInspectDetailModal });
+                        setFileInspectDetailModal(null);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1 transition"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>ลบไฟล์</span>
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => setFileInspectDetailModal(null)}
+                  className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"
+                >
+                  ปิด
+                </button>
+              </div>
             </div>
           </div>
         </div>

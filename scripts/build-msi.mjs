@@ -2,7 +2,7 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
-console.log('=== Building System Storage & Port Inspector MSI Installer ===\n');
+console.log('=== Building SysInfo MSI Installer ===\n');
 
 // 1. Build Frontend
 console.log('1. Building frontend with Vite...');
@@ -16,9 +16,9 @@ execSync('node scripts/pack-asar.mjs', { stdio: 'inherit' });
 console.log('\n2.5 Creating smart uninstall.bat in release/win-unpacked...');
 const uninstallBatContent = `@echo off
 setlocal enabledelayedexpansion
-title Uninstall System Storage & Port Inspector
+title Uninstall SysInfo
 echo ====================================================================
-echo   Uninstalling System Storage ^& Port Inspector (SysPulse)
+echo   Uninstalling SysInfo
 echo ====================================================================
 echo.
 
@@ -32,10 +32,17 @@ if %errorlevel% neq 0 (
 
 :: 2. Terminate any running instances of the app so no files are in use
 echo 1. Terminating running application processes...
+taskkill /F /IM "sysinfo.exe" /T >nul 2>&1
+taskkill /F /IM "SysInfo.exe" /T >nul 2>&1
 taskkill /F /IM "System Storage & Port Inspector.exe" /T >nul 2>&1
 timeout /t 1 /nobreak >nul
 
 :: 3. Check for NSIS uninstaller first
+if exist "%~dp0Uninstall SysInfo.exe" (
+    echo 2. Running NSIS Uninstaller cleanly...
+    start "" /wait "%~dp0Uninstall SysInfo.exe" /S
+    goto CLEANUP
+)
 if exist "%~dp0Uninstall System Storage & Port Inspector.exe" (
     echo 2. Running NSIS Uninstaller cleanly...
     start "" /wait "%~dp0Uninstall System Storage & Port Inspector.exe" /S
@@ -45,7 +52,7 @@ if exist "%~dp0Uninstall System Storage & Port Inspector.exe" (
 :: 4. Search for MSI ProductCode in Registry and uninstall via msiexec
 echo 2. Locating Windows Installer (MSI) registration...
 set PRODUCT_CODE=
-for /f "usebackq tokens=*" %%A in (\`powershell -NoProfile -Command "try { $p = Get-ItemProperty 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'System Storage & Port Inspector' } | Select-Object -First 1; if ($p.PSChildName) { $p.PSChildName } elseif ($p.UninstallString -match '\{[A-Fa-f0-9-]+\}') { $matches[0] } } catch {}"\`) do (
+for /f "usebackq tokens=*" %%A in (\`powershell -NoProfile -Command "try { $p = Get-ItemProperty 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'SysInfo' -or $_.DisplayName -eq 'System Storage & Port Inspector' } | Select-Object -First 1; if ($p.PSChildName) { $p.PSChildName } elseif ($p.UninstallString -match '\{[A-Fa-f0-9-]+\}') { $matches[0] } } catch {}"\`) do (
     set PRODUCT_CODE=%%A
 )
 
@@ -69,8 +76,12 @@ if not "%PRODUCT_CODE%"=="" (
 
 :CLEANUP
 echo 3. Performing final cleanup...
+del /f /q "%PUBLIC%\\Desktop\\SysInfo.lnk" >nul 2>&1
+del /f /q "%USERPROFILE%\\Desktop\\SysInfo.lnk" >nul 2>&1
 del /f /q "%PUBLIC%\\Desktop\\System Storage & Port Inspector.lnk" >nul 2>&1
 del /f /q "%USERPROFILE%\\Desktop\\System Storage & Port Inspector.lnk" >nul 2>&1
+rd /s /q "%ProgramData%\\Microsoft\\Windows\\Start Menu\\Programs\\SysInfo" >nul 2>&1
+rd /s /q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\SysInfo" >nul 2>&1
 rd /s /q "%ProgramData%\\Microsoft\\Windows\\Start Menu\\Programs\\System Storage & Port Inspector" >nul 2>&1
 rd /s /q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\System Storage & Port Inspector" >nul 2>&1
 
