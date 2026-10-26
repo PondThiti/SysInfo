@@ -73,9 +73,9 @@
 
 ไฟล์ตัวติดตั้งถูกส่งออกไปยัง: [`C:\Users\zeroy\Desktop\MyProject\Apps\PC-App\`](file:///C:/Users/zeroy/Desktop/MyProject/Apps/PC-App/)
 
-1. **Windows NSIS Setup (`.exe`):** `SysInfo-Setup-0.1.2.exe` / `SysInfo_Setup.exe`
-2. **Windows Portable Archive (`.zip`):** `SysInfo-0.1.2-win.zip` / `SysInfo_Portable.zip`
-3. **Windows MSI Installer (`.msi`):** `SysInfo-Setup-0.1.2.msi` / `SysInfo_Setup.msi`
+1. **Windows NSIS Setup (`.exe`):** `SysInfo-Setup-0.1.3.exe` / `SysInfo_Setup.exe`
+2. **Windows Portable Archive (`.zip`):** `SysInfo-0.1.3-win.zip` / `SysInfo_Portable.zip`
+3. **Windows MSI Installer (`.msi`):** `SysInfo-Setup-0.1.3.msi` / `SysInfo_Setup.msi`
 4. **Linux Application Package (`.tar.gz`):** `SystemStoragePortInspector_Linux_x64.tar.gz`
 
 ---
