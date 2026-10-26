@@ -259,6 +259,27 @@ ipcMain.handle('organizer-check-watch-folder', async (_event, watchPath) => {
   return await systemService.organizerCheckWatchFolder(watchPath);
 });
 
+// Installed Apps & Smart Uninstall Handlers
+ipcMain.handle('scan-installed-apps', async () => {
+  return await systemService.scanInstalledApps();
+});
+
+ipcMain.handle('preflight-uninstall-check', async (_event, appInfo) => {
+  return await systemService.preflightUninstallCheck(appInfo);
+});
+
+ipcMain.handle('smart-uninstall-app', async (_event, appInfo, options) => {
+  return await systemService.smartUninstallApp(appInfo, options);
+});
+
+ipcMain.handle('scan-residuals', async (_event, appInfo) => {
+  return await systemService.scanResiduals(appInfo);
+});
+
+ipcMain.handle('manage-residual-item', async (_event, action, itemPath) => {
+  return await systemService.manageResidualItem(action, itemPath);
+});
+
 app.whenReady().then(() => {
   createWindow();
 

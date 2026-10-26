@@ -1,6 +1,6 @@
-# ยินดีต้อนรับสู่ SysInfo Wiki (SysPulse v0.1.2)
+# ยินดีต้อนรับสู่ SysInfo Wiki (SysPulse v0.1.3)
 
-**SysInfo (System Storage, File Organizer & Port Inspector)** เป็นยูทิลิตี้ All-in-One สำหรับ Windows 10 และ 11 ออกแบบมาเพื่อช่วยผู้ใช้และนักพัฒนาตรวจสอบฮาร์ดแวร์ จัดการพื้นที่จัดเก็บ จัดระเบียบไฟล์อัจฉริยะ ตรวจจับพอร์ตชน และทำความสะอาดเครื่องอย่างปลอดภัย
+**SysInfo (System Storage, File Organizer & Port Inspector)** เป็นยูทิลิตี้ All-in-One สำหรับ Windows 10 และ 11 ออกแบบมาเพื่อช่วยผู้ใช้และนักพัฒนาตรวจสอบฮาร์ดแวร์ จัดการโปรแกรมที่ติดตั้ง (Smart Uninstall), จัดการพื้นที่จัดเก็บ, จัดระเบียบไฟล์อัจฉริยะ, ตรวจจับพอร์ตชน และทำความสะอาดเครื่องอย่างปลอดภัย
 
 ---
 
@@ -23,11 +23,12 @@
 
 ---
 
-## 🚀 ฟีเจอร์หลักในเวอร์ชัน 0.1.2
+## 🚀 ฟีเจอร์หลักในเวอร์ชัน 0.1.3
 
-* **🗂️ File Organizer (Rule Engine & Undo Journal):** จัดหมวดหมู่ไฟล์และจัดโฟลเดอร์อัตโนมัติตามกฎ พร้อมตาราง Preview และกดย้อนกลับได้ 100%
-* **🎨 Modern Vector Icon:** ไอคอน SVG ใหม่ความละเอียดสูง แปลงเป็น Multi-resolution .ico (256x256, 128x128, 64x64, 48x48, 32x32, 16x16)
+* **📦 Installed Apps & Smart Uninstall:** รวมโปรแกรมไว้ในหน้าเดียว ค้นหาและกรองจากชื่อ ผู้พัฒนา เวอร์ชัน ตำแหน่งติดตั้ง พร้อมระบบ Preflight Check, Preserve User Data และ Residual Scanner (Open Location, Keep, Back Up, Move to Recycle Bin, ลบถาวร)
+* **🗂️ File Organizer (Rule Engine & Undo Journal):** จัดหมวดหมู่ไฟล์และจัดโฟลเดอร์อัตโนมัติตามกฎ พร้อมตาราง Preview และกดย้อนกลับได้เสมอ
+* **🎨 Modern Vector Icon:** ไอคอน SVG ใหม่ความละเอียดสูง แปลงเป็น Multi-resolution .ico
 * **📊 Storage Analyzer & Treemap:** วิเคราะห์พื้นที่ไดรฟ์ แผนผัง Treemap และค้นหาไฟล์ขนาดใหญ่
 * **🎮 Game Libraries Access:** ตรวจจับคลังเกมจาก Steam, Riot, Epic Games, Roblox, GRYPHLINK
-* **🧹 Smart Junk Cleaner:** ล้างไฟล์ Temp, แคชเบราว์เซอร์, และแคชตัวเร่งกราฟิก 3D
-* **🌐 Port & Process Inspector:** ตรวจจับพอร์ต TCP/UDP ที่เปิดใช้งาน ค้นหาโปรเซสและ Service ที่ผูกอยู่
+* **🧹 Smart Junk Cleaner:** ล้างไฟล์ Temp, แคชเบราว์เซอร์, และแคช Shader พร้อมคำเตือนการโหลดเกมครั้งแรก
+* **🌐 Port & Process Inspector:** ตรวจจับพอร์ต TCP/UDP ที่เปิดใช้งาน ค้นหาโปรเซสและ Service ที่ผูกอยู่ พร้อมตัวตรวจจับข้อขัดแย้งแบบตัวเลขกระพริบกระชับตา

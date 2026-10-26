@@ -42,5 +42,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   organizerUndo: (batchId) => ipcRenderer.invoke('organizer-undo', batchId),
   organizerGetHistory: () => ipcRenderer.invoke('organizer-get-history'),
   organizerCleanEmptyFolders: (sourceDir) => ipcRenderer.invoke('organizer-clean-empty-folders', sourceDir),
-  organizerCheckWatchFolder: (watchPath) => ipcRenderer.invoke('organizer-check-watch-folder', watchPath)
+  organizerCheckWatchFolder: (watchPath) => ipcRenderer.invoke('organizer-check-watch-folder', watchPath),
+  scanInstalledApps: () => ipcRenderer.invoke('scan-installed-apps'),
+  preflightUninstallCheck: (appInfo) => ipcRenderer.invoke('preflight-uninstall-check', appInfo),
+  smartUninstallApp: (appInfo, options) => ipcRenderer.invoke('smart-uninstall-app', appInfo, options),
+  scanResiduals: (appInfo) => ipcRenderer.invoke('scan-residuals', appInfo),
+  manageResidualItem: (action, itemPath) => ipcRenderer.invoke('manage-residual-item', action, itemPath)
 });

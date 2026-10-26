@@ -91,6 +91,9 @@ html.theme-light,
 .theme-light .bg-slate-900\/80,
 .theme-light .bg-slate-900\/70,
 .theme-light .bg-slate-900\/60,
+.theme-light .bg-slate-900\/50,
+.theme-light .bg-slate-900\/40,
+.theme-light .bg-slate-900\/30,
 .theme-light .bg-slate-900,
 .theme-light .bg-slate-950\/60,
 .theme-light .bg-slate-950\/70,
@@ -100,9 +103,75 @@ html.theme-light,
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
 }
 
-.theme-light .bg-gradient-to-r {
+/* Card banners with gradients - reset container background to white while preserving child progress bars */
+.theme-light .rounded-2xl.bg-gradient-to-r,
+.theme-light .rounded-3xl.bg-gradient-to-r,
+.theme-light .rounded-2xl.bg-gradient-to-br,
+.theme-light .rounded-3xl.bg-gradient-to-br,
+.theme-light .p-6.bg-gradient-to-r,
+.theme-light .p-5.bg-gradient-to-r {
   background-image: none !important;
   background-color: #ffffff !important;
+}
+
+/* Colored accent alert banners in Light Mode (replaces dark muddy boxes) */
+.theme-light .bg-rose-950\/40,
+.theme-light .bg-rose-950\/30,
+.theme-light .bg-rose-950\/20 {
+  background-color: #fff1f2 !important;
+  border-color: #fecdd3 !important;
+}
+
+.theme-light .bg-amber-950\/40,
+.theme-light .bg-amber-950\/30,
+.theme-light .bg-amber-950\/20,
+.theme-light .bg-amber-950\/50 {
+  background-color: #fffbeb !important;
+  border-color: #fde68a !important;
+}
+
+.theme-light .bg-emerald-950\/40,
+.theme-light .bg-emerald-950\/30,
+.theme-light .bg-emerald-950\/20 {
+  background-color: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+}
+
+.theme-light .bg-indigo-950\/60,
+.theme-light .bg-indigo-950\/50,
+.theme-light .bg-indigo-950\/40,
+.theme-light .bg-indigo-950\/30,
+.theme-light .bg-indigo-950\/20 {
+  background-color: #eef2ff !important;
+  border-color: #c7d2fe !important;
+}
+
+.theme-light .bg-violet-950\/20,
+.theme-light .bg-purple-950\/30,
+.theme-light .bg-fuchsia-950\/40 {
+  background-color: #faf5ff !important;
+  border-color: #e9d5ff !important;
+}
+
+/* Progress Bar Tracks & Meters (fixes missing status bars in Light Theme) */
+.theme-light .rounded-full.bg-slate-950,
+.theme-light .rounded-full.bg-slate-800,
+.theme-light .rounded-full.bg-slate-900,
+.theme-light .h-3.bg-slate-950,
+.theme-light .h-2.bg-slate-800,
+.theme-light .h-1\.5.bg-slate-800 {
+  background-color: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Explicitly preserve progress bar fills & live gradients */
+.theme-light .h-full.bg-gradient-to-r,
+.theme-light [role="progressbar"],
+.theme-light .rounded-full > .bg-gradient-to-r,
+.theme-light .rounded-full > [class*="from-"],
+.theme-light .keep-gradient {
+  background-image: inherit !important;
+  background-color: transparent !important;
 }
 
 /* Borders */
@@ -295,6 +364,44 @@ html.theme-light,
 
 .theme-light .text-sky-400 {
   color: #0284c7 !important;
+}
+
+/* High-contrast readable text colors in Light Mode (fixes blending & dark muddy text) */
+.theme-light .text-indigo-200:not([class*="bg-indigo-600"] *):not([class*="bg-indigo-500"] *):not(.keep-white) {
+  color: #4338ca !important;
+}
+.theme-light .text-rose-200,
+.theme-light .text-rose-200\/80 {
+  color: #9f1239 !important;
+}
+.theme-light .text-amber-200,
+.theme-light .text-amber-200\/80 {
+  color: #92400e !important;
+}
+.theme-light .text-emerald-200,
+.theme-light .text-emerald-200\/80 {
+  color: #065f46 !important;
+}
+.theme-light .text-sky-200,
+.theme-light .text-sky-300 {
+  color: #0369a1 !important;
+}
+
+/* Sidebar navigation item texts in Light Mode */
+.theme-light aside .text-slate-300 {
+  color: #334155 !important;
+}
+.theme-light aside .text-slate-400,
+.theme-light aside .text-slate-500 {
+  color: #64748b !important;
+}
+
+/* Active buttons retain white / bright contrast text */
+.theme-light [class*="bg-indigo-600"] .text-indigo-200 {
+  color: #e0e7ff !important;
+}
+.theme-light [class*="bg-amber-500"] .text-slate-950 {
+  color: #020617 !important;
 }
 
 /* Toast notifications in Light Mode */
