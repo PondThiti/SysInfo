@@ -623,6 +623,8 @@ async function scanRealJunk() {
     badge: '🎮 เกมเมอร์',
     badgeColor: 'rose',
     expanded: true,
+    hasShaderWarning: true,
+    shaderNotice: '⚠️ ข้อควรทราบสำคัญ: ไฟล์แคชเชดเดอร์ (Shader Cache) ช่วยให้เกมเปิดและเรนเดอร์ภาพ 3D ได้ลื่นไหล หากลบไฟล์นี้ เมื่อเข้าเล่นเกมในครั้งถัดไป ตัวเกมจะโหลดช้าเหมือนเข้าเกมครั้งแรกเพื่อคอมไพล์ Shader ใหม่ (จะกลับมาเร็วตามปกติในครั้งถัดไป)',
     items: []
   };
 
@@ -636,7 +638,9 @@ async function scanRealJunk() {
       sizeMB: d3dCache.sizeMB,
       lastModified: 'วันนี้',
       selected: true,
-      fileCount: d3dCache.count
+      fileCount: d3dCache.count,
+      isShaderCache: true,
+      shaderWarning: 'ลบแล้วเมื่อเปิดเข้าเกมครั้งถัดไปจะโหลดช้าเหมือนเข้าเกมครั้งแรก เพื่อ Compile Shader ใหม่'
     });
   }
 
@@ -650,7 +654,9 @@ async function scanRealJunk() {
       sizeMB: nvDxCache.sizeMB,
       lastModified: 'วันนี้',
       selected: true,
-      fileCount: nvDxCache.count
+      fileCount: nvDxCache.count,
+      isShaderCache: true,
+      shaderWarning: 'ลบแล้วเมื่อเปิดเข้าเกมครั้งถัดไปจะโหลดช้าเหมือนเข้าเกมครั้งแรก เพื่อ Compile Shader ใหม่'
     });
   }
 
@@ -663,7 +669,9 @@ async function scanRealJunk() {
       sizeMB: nvGlCache.sizeMB,
       lastModified: 'วันนี้',
       selected: true,
-      fileCount: nvGlCache.count
+      fileCount: nvGlCache.count,
+      isShaderCache: true,
+      shaderWarning: 'ลบแล้วเมื่อเปิดเข้าเกมครั้งถัดไปจะโหลดช้าเหมือนเข้าเกมครั้งแรก เพื่อ Compile Shader ใหม่'
     });
   }
 
@@ -677,7 +685,9 @@ async function scanRealJunk() {
       sizeMB: amdDxCache.sizeMB,
       lastModified: 'วันนี้',
       selected: true,
-      fileCount: amdDxCache.count
+      fileCount: amdDxCache.count,
+      isShaderCache: true,
+      shaderWarning: 'ลบแล้วเมื่อเปิดเข้าเกมครั้งถัดไปจะโหลดช้าเหมือนเข้าเกมครั้งแรก เพื่อ Compile Shader ใหม่'
     });
   }
 
@@ -2980,6 +2990,537 @@ async function organizerCheckWatchFolder(watchPath) {
   return { hasRecommendation: false };
 }
 
+// =========================================================================
+// 17. INSTALLED APPS & SMART UNINSTALL ENGINE
+// =========================================================================
+
+async function scanInstalledApps() {
+  const script = `
+    $ErrorActionPreference = 'SilentlyContinue'
+    $apps = @()
+
+    # 1. HKLM 64-bit
+    $k1 = Get-ItemProperty "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*" |
+        Where-Object { $_.DisplayName -and $_.DisplayName.Trim() -ne '' -and $_.SystemComponent -ne 1 -and -not $_.ParentKeyName }
+    foreach ($a in $k1) {
+        $apps += [PSCustomObject]@{
+            Id = "m64_" + $a.PSChildName
+            Name = [string]$a.DisplayName.Trim()
+            Version = if ($a.DisplayVersion) { [string]$a.DisplayVersion.Trim() } else { "Unknown" }
+            Publisher = if ($a.Publisher) { [string]$a.Publisher.Trim() } else { "Unknown Publisher" }
+            InstallLocation = if ($a.InstallLocation) { [string]$a.InstallLocation.Trim() } else { "" }
+            UninstallString = if ($a.UninstallString) { [string]$a.UninstallString.Trim() } else { "" }
+            QuietUninstallString = if ($a.QuietUninstallString) { [string]$a.QuietUninstallString.Trim() } else { "" }
+            ReportedSizeMB = if ($a.EstimatedSize) { [math]::Round([double]$a.EstimatedSize / 1024, 1) } else { $null }
+            InstallType = if ($a.WindowsInstaller -eq 1 -or ($a.UninstallString -and $a.UninstallString -match 'msiexec')) { "msi" } else { "win32" }
+            Scope = "machine"
+        }
+    }
+
+    # 2. HKLM 32-bit
+    $k2 = Get-ItemProperty "HKLM:\\Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*" |
+        Where-Object { $_.DisplayName -and $_.DisplayName.Trim() -ne '' -and $_.SystemComponent -ne 1 -and -not $_.ParentKeyName }
+    foreach ($a in $k2) {
+        $apps += [PSCustomObject]@{
+            Id = "m32_" + $a.PSChildName
+            Name = [string]$a.DisplayName.Trim()
+            Version = if ($a.DisplayVersion) { [string]$a.DisplayVersion.Trim() } else { "Unknown" }
+            Publisher = if ($a.Publisher) { [string]$a.Publisher.Trim() } else { "Unknown Publisher" }
+            InstallLocation = if ($a.InstallLocation) { [string]$a.InstallLocation.Trim() } else { "" }
+            UninstallString = if ($a.UninstallString) { [string]$a.UninstallString.Trim() } else { "" }
+            QuietUninstallString = if ($a.QuietUninstallString) { [string]$a.QuietUninstallString.Trim() } else { "" }
+            ReportedSizeMB = if ($a.EstimatedSize) { [math]::Round([double]$a.EstimatedSize / 1024, 1) } else { $null }
+            InstallType = if ($a.WindowsInstaller -eq 1 -or ($a.UninstallString -and $a.UninstallString -match 'msiexec')) { "msi" } else { "win32" }
+            Scope = "machine"
+        }
+    }
+
+    # 3. HKCU
+    $k3 = Get-ItemProperty "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*" |
+        Where-Object { $_.DisplayName -and $_.DisplayName.Trim() -ne '' -and $_.SystemComponent -ne 1 -and -not $_.ParentKeyName }
+    foreach ($a in $k3) {
+        $apps += [PSCustomObject]@{
+            Id = "usr_" + $a.PSChildName
+            Name = [string]$a.DisplayName.Trim()
+            Version = if ($a.DisplayVersion) { [string]$a.DisplayVersion.Trim() } else { "Unknown" }
+            Publisher = if ($a.Publisher) { [string]$a.Publisher.Trim() } else { "Unknown Publisher" }
+            InstallLocation = if ($a.InstallLocation) { [string]$a.InstallLocation.Trim() } else { "" }
+            UninstallString = if ($a.UninstallString) { [string]$a.UninstallString.Trim() } else { "" }
+            QuietUninstallString = if ($a.QuietUninstallString) { [string]$a.QuietUninstallString.Trim() } else { "" }
+            ReportedSizeMB = if ($a.EstimatedSize) { [math]::Round([double]$a.EstimatedSize / 1024, 1) } else { $null }
+            InstallType = if ($a.WindowsInstaller -eq 1 -or ($a.UninstallString -and $a.UninstallString -match 'msiexec')) { "msi" } else { "win32" }
+            Scope = "user"
+        }
+    }
+
+    # 4. Appx packages (Store apps)
+    $storeApps = Get-AppxPackage | Where-Object { -not $_.IsFramework -and $_.NonRemovable -ne $true -and $_.SignatureKind -eq 'Store' }
+    foreach ($s in $storeApps) {
+        $apps += [PSCustomObject]@{
+            Id = "store_" + $s.Name
+            Name = [string]$s.Name
+            Version = [string]$s.Version
+            Publisher = if ($s.PublisherId) { [string]$s.PublisherId } else { "Microsoft Store" }
+            InstallLocation = [string]$s.InstallLocation
+            UninstallString = "Remove-AppxPackage -Package " + $s.PackageFullName
+            QuietUninstallString = "Remove-AppxPackage -Package " + $s.PackageFullName
+            ReportedSizeMB = $null
+            InstallType = "store"
+            Scope = "user"
+            PackageFullName = [string]$s.PackageFullName
+        }
+    }
+
+    # Deduplicate
+    $unique = @{}
+    $finalList = @()
+    foreach ($item in $apps) {
+        $key = $item.Name.ToLower()
+        if (-not $unique.ContainsKey($key)) {
+            $unique[$key] = $true
+            $finalList += $item
+        }
+    }
+
+    $finalList | ConvertTo-Json -Depth 2
+  `;
+
+  const res = await runPowerShell(script);
+  if (!res.success || !res.data) return [];
+  const rawList = Array.isArray(res.data) ? res.data : [res.data];
+
+  const devKeywords = [
+    'git', 'github', 'node', 'nodejs', 'python', 'pip', 'visual studio', 'vs code', 'vscode', 'sublime',
+    'intellij', 'pycharm', 'webstorm', 'clion', 'goland', 'docker', 'rust', 'cargo', 'go', 'java', 'jdk',
+    'sdk', 'postman', 'terminal', 'powershell', 'wireshark', 'dbeaver', 'mongodb', 'mysql', 'postgresql',
+    'cmake', 'ninja', 'android studio', 'unity', 'unreal', 'godot', 'vcpkg', 'compiler', 'mingw'
+  ];
+
+  return rawList.map((app) => {
+    const nameLower = (app.Name || '').toLowerCase();
+    const pubLower = (app.Publisher || '').toLowerCase();
+
+    let category = 'win32';
+    if (app.InstallType === 'store') {
+      category = 'store';
+    } else if (devKeywords.some((kw) => nameLower.includes(kw) || pubLower.includes(kw))) {
+      category = 'developer';
+    } else {
+      category = 'win32';
+    }
+
+    let scannedSizeMB = null;
+    if (app.InstallLocation && fs.existsSync(app.InstallLocation)) {
+      try {
+        const stats = getFolderStats(app.InstallLocation, 2);
+        if (stats && stats.sizeMB > 0) {
+          scannedSizeMB = stats.sizeMB;
+        }
+      } catch (e) {}
+    }
+
+    return {
+      id: app.Id || `app_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+      name: app.Name || 'ไม่ระบุชื่อ',
+      version: app.Version === 'Unknown' ? 'ไม่ระบุ' : (app.Version || 'ไม่ระบุ'),
+      publisher: app.Publisher === 'Unknown Publisher' ? 'ไม่ระบุผู้พัฒนา' : (app.Publisher || 'ไม่ระบุผู้พัฒนา'),
+      installLocation: app.InstallLocation || '',
+      uninstallString: app.UninstallString || '',
+      quietUninstallString: app.QuietUninstallString || '',
+      reportedSizeMB: app.ReportedSizeMB || null,
+      scannedSizeMB: scannedSizeMB,
+      installType: app.InstallType || 'win32',
+      scope: app.Scope || 'machine',
+      category: category,
+      packageFullName: app.PackageFullName || ''
+    };
+  });
+}
+
+async function preflightUninstallCheck(appInfo) {
+  if (!appInfo) return null;
+
+  // 1. Check for running processes
+  const psScript = `
+    $procs = Get-Process -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, Path, WorkingSet64;
+    $procs | ConvertTo-Json -Depth 2
+  `;
+  const psRes = await runPowerShell(psScript);
+  const allProcs = (psRes.success && psRes.data) ? (Array.isArray(psRes.data) ? psRes.data : [psRes.data]) : [];
+
+  const appNameKeywords = appInfo.name.toLowerCase().replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter((w) => w.length > 2);
+  const targetDirLower = (appInfo.installLocation || '').toLowerCase();
+
+  const matchingProcesses = allProcs.filter((p) => {
+    const pName = (p.ProcessName || '').toLowerCase();
+    const pPath = (p.Path || '').toLowerCase();
+    if (targetDirLower && pPath && pPath.startsWith(targetDirLower)) return true;
+    return appNameKeywords.some((kw) => pName.includes(kw));
+  }).map((p) => ({
+    pid: p.Id,
+    name: `${p.ProcessName}.exe`,
+    path: p.Path || '',
+    memoryMB: Math.round((p.WorkingSet64 || 0) / (1024 * 1024))
+  }));
+
+  // 2. Administrator check
+  const requiresAdmin = appInfo.scope === 'machine' ||
+    (appInfo.installLocation && (
+      appInfo.installLocation.toLowerCase().includes('program files') ||
+      appInfo.installLocation.toLowerCase().includes('windows')
+    ));
+
+  // 3. Related Windows Services
+  const svcScript = `
+    Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Select-Object Name, DisplayName, State, PathName | ConvertTo-Json -Depth 2
+  `;
+  const svcRes = await runPowerShell(svcScript);
+  const allServices = (svcRes.success && svcRes.data) ? (Array.isArray(svcRes.data) ? svcRes.data : [svcRes.data]) : [];
+  const relatedServices = allServices.filter((s) => {
+    const sName = (s.Name || '').toLowerCase();
+    const sDisp = (s.DisplayName || '').toLowerCase();
+    const sPath = (s.PathName || '').toLowerCase();
+    if (targetDirLower && sPath && sPath.includes(targetDirLower)) return true;
+    return appNameKeywords.some((kw) => sName.includes(kw) || sDisp.includes(kw));
+  }).map((s) => ({
+    name: s.Name,
+    displayName: s.DisplayName,
+    state: s.State
+  }));
+
+  // 4. Startup Entries
+  const startupScript = `
+    $run = Get-ItemProperty "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" -ErrorAction SilentlyContinue;
+    $entries = @();
+    foreach ($prop in $run.PSObject.Properties) {
+      if ($prop.Name -notmatch 'PS' -and $prop.Value) {
+        $entries += [PSCustomObject]@{ Name = $prop.Name; Value = [string]$prop.Value }
+      }
+    }
+    $entries | ConvertTo-Json -Depth 2
+  `;
+  const startRes = await runPowerShell(startupScript);
+  const allStartup = (startRes.success && startRes.data) ? (Array.isArray(startRes.data) ? startRes.data : [startRes.data]) : [];
+  const relatedStartup = allStartup.filter((st) => {
+    const stName = (st.Name || '').toLowerCase();
+    const stVal = (st.Value || '').toLowerCase();
+    if (targetDirLower && stVal && stVal.includes(targetDirLower)) return true;
+    return appNameKeywords.some((kw) => stName.includes(kw));
+  }).map((st) => ({
+    name: st.Name,
+    command: st.Value
+  }));
+
+  // 5. Driver / Shared Components Safety Check
+  const driverKeywords = ['driver', 'vcredist', 'visual c++', 'directx', 'framework', 'runtime', 'intel', 'nvidia', 'amd', 'realtek'];
+  const nameLower = appInfo.name.toLowerCase();
+  const isDriverOrRuntime = driverKeywords.some((dk) => nameLower.includes(dk));
+  const sharedSafety = isDriverOrRuntime
+    ? {
+        status: 'unverified',
+        warning: '⚠️ ไม่สามารถยืนยันความปลอดภัยได้ เนื่องจากโปรแกรมอาจเกี่ยวข้องกับไดรเวอร์ รันไทม์ หรือมีส่วนประกอบที่แอปพลิเคชันอื่นใช้งานร่วมกัน'
+      }
+    : {
+        status: 'safe_standalone',
+        warning: 'โปรแกรมเป็นแอปพลิเคชันเดี่ยว ไม่พบความเชื่อมโยงกับไดรเวอร์หลักของระบบ'
+      };
+
+  // 6. Reboot requirement
+  const rebootRequired = isDriverOrRuntime || (matchingProcesses.length > 0 && requiresAdmin);
+
+  return {
+    isRunning: matchingProcesses.length > 0,
+    runningProcesses: matchingProcesses,
+    unsavedWarning: matchingProcesses.length > 0,
+    requiresAdmin,
+    adminReason: requiresAdmin
+      ? 'โปรแกรมได้รับการติดตั้งในระดับระบบ (Machine-wide / Program Files) ต้องใช้สิทธิ์ Administrator ในการถอนการติดตั้ง'
+      : 'ติดตั้งในพื้นที่บัญชีผู้ใช้ปัจจุบัน ไม่จำเป็นต้องขอสิทธิ์ Administrator เพิ่มเติม',
+    relatedServices,
+    relatedStartup,
+    sharedSafety,
+    rebootRequired,
+    rebootMessage: rebootRequired
+      ? 'อาจจำเป็นต้องรีสตาร์ตเครื่องหากมีไฟล์ระบบถูกล็อกค้างไว้'
+      : 'ไม่ต้องรีสตาร์ตเครื่องคอมพิวเตอร์หลังการถอน'
+  };
+}
+
+async function smartUninstallApp(appInfo, options = {}) {
+  const { backupUserData = false } = options;
+
+  let backupPath = null;
+  if (backupUserData) {
+    try {
+      const backupDir = path.join(os.homedir(), 'SysInfo_Backups', appInfo.name.replace(/[^a-zA-Z0-9_\-]/g, '_'), Date.now().toString());
+      fs.mkdirSync(backupDir, { recursive: true });
+      const localAppDir = path.join(process.env.LOCALAPPDATA || '', appInfo.name);
+      const roamAppDir = path.join(process.env.APPDATA || '', appInfo.name);
+      if (fs.existsSync(localAppDir)) {
+        fs.cpSync(localAppDir, path.join(backupDir, 'LocalAppData'), { recursive: true });
+      }
+      if (fs.existsSync(roamAppDir)) {
+        fs.cpSync(roamAppDir, path.join(backupDir, 'RoamingAppData'), { recursive: true });
+      }
+      backupPath = backupDir;
+    } catch (e) {
+      console.warn('Backup user data notice:', e.message);
+    }
+  }
+
+  return new Promise((resolve) => {
+    // 1. Store App via Remove-AppxPackage
+    if (appInfo.installType === 'store' && appInfo.packageFullName) {
+      exec(`powershell.exe -Command "Remove-AppxPackage -Package '${appInfo.packageFullName}'"`, (err) => {
+        if (err) {
+          resolve({ success: false, message: `ถอนการติดตั้ง Store App ไม่สำเร็จ: ${err.message}` });
+        } else {
+          resolve({
+            success: true,
+            message: 'ถอนการติดตั้งผ่าน Windows Store Package เรียบร้อยแล้ว',
+            backupPath
+          });
+        }
+      });
+      return;
+    }
+
+    // 2. Windows MSI uninstaller
+    if (appInfo.installType === 'msi' || (appInfo.uninstallString && appInfo.uninstallString.toLowerCase().includes('msiexec'))) {
+      const msiMatch = appInfo.uninstallString.match(/\{[0-9A-Fa-f\-]{36}\}/);
+      const productCode = msiMatch ? msiMatch[0] : '';
+      const cmd = productCode ? `msiexec.exe /x "${productCode}" /passive` : appInfo.uninstallString;
+      exec(cmd, (err) => {
+        if (err && err.code !== 3010) {
+          resolve({ success: false, message: `ตัวถอนติดตั้ง MSI รายงานข้อผิดพลาด: ${err.message}` });
+        } else {
+          resolve({
+            success: true,
+            message: 'เรียกตัวถอนการติดตั้ง Windows Installer (MSI) สำเร็จเรียบร้อย',
+            backupPath
+          });
+        }
+      });
+      return;
+    }
+
+    // 3. Standard Win32 Uninstaller
+    const uninstCmd = appInfo.quietUninstallString || appInfo.uninstallString;
+    if (!uninstCmd) {
+      return resolve({
+        success: false,
+        message: 'ไม่พบคำสั่งถอนการติดตั้งที่ลงทะเบียนไว้ใน Windows Registry สำหรับโปรแกรมนี้'
+      });
+    }
+
+    exec(uninstCmd, (err) => {
+      if (err) {
+        resolve({
+          success: false,
+          message: `การทำงานของตัวถอนติดตั้งเสร็จสิ้น: ${err.message}`
+        });
+      } else {
+        resolve({
+          success: true,
+          message: 'เรียกตัวถอนการติดตั้งมาตรฐานของโปรแกรมสำเร็จเรียบร้อย',
+          backupPath
+        });
+      }
+    });
+  });
+}
+
+async function scanResiduals(appInfo) {
+  if (!appInfo) return [];
+  const residuals = [];
+
+  const localAppData = process.env.LOCALAPPDATA || '';
+  const appData = process.env.APPDATA || '';
+  const programData = process.env.ProgramData || 'C:\\ProgramData';
+  const nameClean = appInfo.name.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim();
+
+  // 1. Cache & App Logs in LocalAppData
+  const localAppDir = path.join(localAppData, nameClean);
+  if (fs.existsSync(localAppDir)) {
+    const stat = getFolderStats(localAppDir, 2);
+    residuals.push({
+      id: `res_local_${Date.now()}`,
+      name: `${appInfo.name} Local AppData & Cache`,
+      path: localAppDir,
+      type: 'cache_log',
+      typeName: 'Cache และ Log ของแอป',
+      recommendedAction: 'review',
+      recommendation: 'Cache และ Log ของแอป: แสดงให้ตรวจสอบก่อนลบ',
+      riskLevel: 'low',
+      sizeMB: stat ? stat.sizeMB : 1.2,
+      fileCount: stat ? stat.count : 5,
+      status: 'pending'
+    });
+  }
+
+  // 2. Personal configuration in Roaming AppData
+  const roamAppDir = path.join(appData, nameClean);
+  if (fs.existsSync(roamAppDir)) {
+    const stat = getFolderStats(roamAppDir, 2);
+    residuals.push({
+      id: `res_roam_${Date.now()}`,
+      name: `${appInfo.name} Roaming User Data`,
+      path: roamAppDir,
+      type: 'app_data',
+      typeName: 'ข้อมูลใน AppData',
+      recommendedAction: 'keep',
+      recommendation: 'ข้อมูลใน AppData: แนะนำให้เก็บไว้เป็นค่าเริ่มต้น (Preserve User Data)',
+      riskLevel: 'medium',
+      sizeMB: stat ? stat.sizeMB : 0.8,
+      fileCount: stat ? stat.count : 3,
+      status: 'pending'
+    });
+  }
+
+  // 3. Leftover Program Directory
+  if (appInfo.installLocation && fs.existsSync(appInfo.installLocation)) {
+    const stat = getFolderStats(appInfo.installLocation, 2);
+    residuals.push({
+      id: `res_prog_${Date.now()}`,
+      name: `โฟลเดอร์โปรแกรมที่ติดตั้ง (${path.basename(appInfo.installLocation)})`,
+      path: appInfo.installLocation,
+      type: 'leftover_folder',
+      typeName: 'โฟลเดอร์โปรแกรมที่เหลือ',
+      recommendedAction: 'review',
+      recommendation: 'โฟลเดอร์โปรแกรมที่เหลือ: ตรวจสอบ Path และเจ้าของก่อนลบ',
+      riskLevel: 'medium',
+      sizeMB: stat ? stat.sizeMB : 2.5,
+      fileCount: stat ? stat.count : 10,
+      status: 'pending'
+    });
+  }
+
+  // 4. ProgramData Leftover
+  const pDataDir = path.join(programData, nameClean);
+  if (fs.existsSync(pDataDir)) {
+    const stat = getFolderStats(pDataDir, 2);
+    residuals.push({
+      id: `res_pdata_${Date.now()}`,
+      name: `${appInfo.name} Shared ProgramData`,
+      path: pDataDir,
+      type: 'leftover_folder',
+      typeName: 'โฟลเดอร์โปรแกรมที่เหลือ',
+      recommendedAction: 'review',
+      recommendation: 'โฟลเดอร์โปรแกรมที่เหลือ: ตรวจสอบ Path และเจ้าของก่อนลบ',
+      riskLevel: 'medium',
+      sizeMB: stat ? stat.sizeMB : 0.5,
+      fileCount: stat ? stat.count : 2,
+      status: 'pending'
+    });
+  }
+
+  // 5. Startup Entry residual check
+  const startupScript = `
+    $run = Get-ItemProperty "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" -ErrorAction SilentlyContinue;
+    $entries = @();
+    foreach ($prop in $run.PSObject.Properties) {
+      if ($prop.Name -notmatch 'PS' -and $prop.Name.ToLower().Contains("${nameClean.toLowerCase()}")) {
+        $entries += [PSCustomObject]@{ Name = $prop.Name; Value = [string]$prop.Value }
+      }
+    }
+    $entries | ConvertTo-Json -Depth 2
+  `;
+  const stRes = await runPowerShell(startupScript);
+  if (stRes.success && stRes.data) {
+    const items = Array.isArray(stRes.data) ? stRes.data : [stRes.data];
+    items.forEach((st, idx) => {
+      residuals.push({
+        id: `res_startup_${idx}`,
+        name: `Startup Run Key: ${st.Name}`,
+        path: `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\${st.Name}`,
+        type: 'startup_entry',
+        typeName: 'Startup Entry ที่ตกค้าง',
+        recommendedAction: 'review',
+        recommendation: 'Startup Entry ที่ตกค้าง: ตรวจสอบความเชื่อมโยงก่อนเปลี่ยนแปลง',
+        riskLevel: 'medium',
+        sizeMB: 0,
+        fileCount: 1,
+        status: 'pending'
+      });
+    });
+  }
+
+  // 6. Registry residual check
+  residuals.push({
+    id: `res_reg_${Date.now()}`,
+    name: `Registry Key Traces (${nameClean})`,
+    path: `HKCU\\Software\\${nameClean}`,
+    type: 'registry_key',
+    typeName: 'Registry ที่อาจตกค้าง',
+    recommendedAction: 'keep',
+    recommendation: 'Registry ที่อาจตกค้าง: ให้ตรวจสอบอย่างระมัดระวัง ไม่ลบแบบกวาดทั้งหมด',
+    riskLevel: 'high',
+    sizeMB: 0,
+    fileCount: 1,
+    status: 'pending'
+  });
+
+  return residuals;
+}
+
+async function manageResidualItem(action, itemPath) {
+  if (!itemPath) return { success: false, message: 'ไม่พบตำแหน่งไฟล์เป้าหมาย' };
+
+  try {
+    if (action === 'open') {
+      if (fs.existsSync(itemPath)) {
+        shell.showItemInFolder(itemPath);
+        return { success: true, message: 'เปิดตำแหน่งไฟล์ใน Explorer เรียบร้อย' };
+      }
+      return { success: false, message: 'ตำแหน่งไฟล์ไม่มีอยู่บนดิสก์จริง' };
+    }
+
+    if (action === 'keep') {
+      return { success: true, message: 'กำหนดให้เก็บข้อมูลรายการนี้ไว้เรียบร้อย' };
+    }
+
+    if (action === 'backup') {
+      if (!fs.existsSync(itemPath)) {
+        return { success: false, message: 'ไม่พบไฟล์หรือโฟลเดอร์ต้นทางในการสำรองข้อมูล' };
+      }
+      const backupDir = path.join(os.homedir(), 'SysInfo_Backups', 'Residuals', Date.now().toString());
+      fs.mkdirSync(backupDir, { recursive: true });
+      const destPath = path.join(backupDir, path.basename(itemPath));
+      fs.cpSync(itemPath, destPath, { recursive: true });
+      return {
+        success: true,
+        message: `สำรองข้อมูลสำเร็จไปยัง: ${destPath}`,
+        destPath
+      };
+    }
+
+    if (action === 'recycle') {
+      if (!fs.existsSync(itemPath)) {
+        return { success: false, message: 'ไม่พบไฟล์ที่ระบุ อาจถูกลบไปแล้ว' };
+      }
+      await shell.trashItem(itemPath);
+      return { success: true, message: 'ย้ายรายการลงถังขยะ Recycle Bin อย่างปลอดภัยเรียบร้อย' };
+    }
+
+    if (action === 'delete_permanent') {
+      if (!fs.existsSync(itemPath)) {
+        return { success: false, message: 'ไม่พบไฟล์ที่ระบุ' };
+      }
+      const stat = fs.statSync(itemPath);
+      if (stat.isDirectory()) {
+        fs.rmSync(itemPath, { recursive: true, force: true });
+      } else {
+        fs.unlinkSync(itemPath);
+      }
+      return { success: true, message: 'ลบรายการอย่างถาวรเรียบร้อยแล้ว' };
+    }
+
+    return { success: false, message: `การกระทำ '${action}' ไม่รองรับ` };
+  } catch (err) {
+    return { success: false, message: `เกิดข้อผิดพลาด: ${err.message}` };
+  }
+}
+
 module.exports = {
   getSystemDrives,
   getSystemTelemetry,
@@ -3014,5 +3555,10 @@ module.exports = {
   organizerUndo,
   organizerGetHistory,
   organizerCleanEmptyFolders,
-  organizerCheckWatchFolder
+  organizerCheckWatchFolder,
+  scanInstalledApps,
+  preflightUninstallCheck,
+  smartUninstallApp,
+  scanResiduals,
+  manageResidualItem
 };

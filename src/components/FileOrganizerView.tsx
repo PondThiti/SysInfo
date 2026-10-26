@@ -391,15 +391,12 @@ export default function FileOrganizerView({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold text-white tracking-tight">ระบบจัดระเบียบไฟล์อัจฉริยะ (File Organizer)</h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  v0.1.2
-                </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                   Rule Engine & Undo Journal
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                จัดระเบียบโฟลเดอร์อัตโนมัติตามกฎ "ถ้า → แล้ว", ตรวจสอบตัวอย่าง Dry-run ก่อนทำจริง, ป้องกันเขียนทับ และกดย้อนกลับ (Undo) ได้ 100%
+                จัดระเบียบโฟลเดอร์อัตโนมัติตามกฎ "ถ้า → แล้ว", ตรวจสอบตัวอย่าง Dry-run ก่อนทำจริง, ป้องกันเขียนทับ และกดย้อนกลับ (Undo) ได้เสมอ
               </p>
             </div>
           </div>
@@ -1126,7 +1123,7 @@ export default function FileOrganizerView({
             <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-[11px] text-emerald-300 space-y-1">
               <div className="font-bold flex items-center gap-1.5">
                 <Check className="w-3.5 h-3.5" />
-                ความปลอดภัย 100%:
+                ระบบความปลอดภัย Undo Journal:
               </div>
               <div>
                 บันทึกลง Undo Journal เรียบร้อย หากต้องการเปลี่ยนใจ สามารถกดย้อนกลับไฟล์ทั้งหมดกลับตำแหน่งเดิมได้ทันที

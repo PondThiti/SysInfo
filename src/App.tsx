@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import FileOrganizerView from './components/FileOrganizerView';
+import InstalledAppsView from './components/InstalledAppsView';
 import {
   LayoutDashboard,
   HardDrive,
@@ -45,7 +46,8 @@ import {
   FolderInput,
   FileSearch,
   CheckSquare,
-  Gamepad2
+  Gamepad2,
+  Package
 } from 'lucide-react';
 
 // Format size helper (MB to MB/GB)
@@ -72,8 +74,30 @@ interface IpcLog {
 }
 
 export default function App() {
-  // Navigation tabs: 'dashboard' | 'storage' | 'organizer' | 'cleaner' | 'ports' | 'settings'
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'storage' | 'organizer' | 'cleaner' | 'ports' | 'settings'>('dashboard');
+  // Navigation tabs: 'dashboard' | 'storage' | 'organizer' | 'cleaner' | 'ports' | 'apps' | 'settings'
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'storage' | 'organizer' | 'cleaner' | 'ports' | 'apps' | 'settings'>('dashboard');
+
+  // Seen features state for "NEW" badge (only appears first time until visited)
+  const [seenFeatures, setSeenFeatures] = useState<{ [key: string]: boolean }>(() => {
+    try {
+      const saved = localStorage.getItem('sysinfo_seen_features');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const markFeatureSeen = (featureId: string) => {
+    setSeenFeatures((prev) => {
+      if (prev[featureId]) return prev;
+      const next = { ...prev, [featureId]: true };
+      try {
+        localStorage.setItem('sysinfo_seen_features', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
   const [organizerDirectSourceDir, setOrganizerDirectSourceDir] = useState<string>('');
   const [storageSubTab, setStorageSubTab] = useState<'heavy' | 'duplicates' | 'games'>('heavy');
   const [portSubTab, setPortSubTab] = useState<'ports' | 'services' | 'background' | 'conflicts' | 'blockers' | 'startup'>('ports');
@@ -1352,7 +1376,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <span className="font-bold tracking-tight text-sm text-white">SysInfo</span>
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-medium">
-              v0.1.2 • SysInfo
+              v0.1.3 • SysInfo
             </span>
           </div>
           <span className="hidden md:inline-block text-xs text-slate-500 pl-2 border-l border-slate-800">
@@ -1487,13 +1511,6 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              <span
-                className={`text-xs px-2 py-0.5 rounded-full ${
-                  activeTab === 'storage' ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'
-                }`}
-              >
-                {largeFiles.length}
-              </span>
             </button>
 
             {/* Menu 2.5: File Organizer */}
@@ -1517,9 +1534,6 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
-                New
-              </span>
             </button>
 
             {/* Menu 3: Junk Cleaner */}
@@ -1574,17 +1588,39 @@ export default function App() {
               <div className="flex items-center gap-1.5">
                 {conflicts.length > 0 && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold animate-pulse">
-                    {conflicts.length} ขัดแย้ง
+                    {conflicts.length}
                   </span>
                 )}
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full ${
-                    activeTab === 'ports' ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'
-                  }`}
-                >
-                  {ports.length}
-                </span>
               </div>
+            </button>
+
+            {/* Menu 4.5: Installed Apps & Smart Uninstall */}
+            <button
+              onClick={() => {
+                setActiveTab('apps');
+                markFeatureSeen('installed_apps');
+                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                activeTab === 'apps'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
+                  : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Package className="w-4 h-4 shrink-0" />
+                <div className="text-left">
+                  <div>โปรแกรมที่ติดตั้ง</div>
+                  <div className={`text-[11px] ${activeTab === 'apps' ? 'text-indigo-200' : 'text-slate-500'}`}>
+                    Installed Apps
+                  </div>
+                </div>
+              </div>
+              {!seenFeatures['installed_apps'] && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold animate-pulse">
+                  New
+                </span>
+              )}
             </button>
 
             {/* Menu 5: Settings */}
@@ -1919,7 +1955,7 @@ export default function App() {
                         {/* Usage Progress Bar */}
                         <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
                           <div
-                            className={`h-full rounded-full bg-gradient-to-r ${usedColor} transition-all duration-500`}
+                            className={`h-full rounded-full bg-gradient-to-r ${usedColor} transition-all duration-500 keep-gradient`}
                             style={{ width: `${drive.usedPercent}%` }}
                           />
                         </div>
@@ -3160,7 +3196,7 @@ export default function App() {
                           <span>
                             {junkCleanResult.failedCount > 0
                               ? `ลบสำเร็จ ${junkCleanResult.cleanedCount} รายการ (ได้พื้นที่คืน ${formatSize(junkCleanResult.reclaimedMB)}) มี ${junkCleanResult.failedCount} ไฟล์ที่ไม่สามารถลบได้`
-                              : `ล้างไฟล์ขยะเสร็จสมบูรณ์ 100% (${junkCleanResult.cleanedCount} รายการ, คืนพื้นที่ ${formatSize(junkCleanResult.reclaimedMB)})`}
+                              : `ล้างไฟล์ขยะเสร็จสมบูรณ์ (${junkCleanResult.cleanedCount} รายการ, คืนพื้นที่ ${formatSize(junkCleanResult.reclaimedMB)})`}
                           </span>
                           <span
                             className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
@@ -3257,6 +3293,12 @@ export default function App() {
                             </span>
                           </div>
                           <p className="text-xs text-slate-400 mt-0.5">{cat.description}</p>
+                          {(cat.hasShaderWarning || cat.id === 'game_caches') && (
+                            <div className="mt-2 p-2 rounded-xl bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-200 flex items-center gap-2">
+                              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                              <span>{cat.shaderNotice || '⚠️ คำเตือน: Shader Cache ช่วยให้เกมเปิดเล่นได้ลื่นไหล หากลบไฟล์นี้ เมื่อเข้าเกมครั้งแรกจะโหลดช้าเหมือนเข้าเกมครั้งแรกเพื่อ Compile Shader ใหม่'}</span>
+                            </div>
+                          )}
                         </div>
                         <span className="text-xs font-mono text-slate-400">
                           {cat.items?.length || 0} รายการ
@@ -3280,10 +3322,26 @@ export default function App() {
                                   className="mt-1 rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0"
                                 />
                                 <div>
-                                  <div className="font-semibold text-xs text-slate-200">{item.name}</div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-semibold text-xs text-slate-200">{item.name}</span>
+                                    {(item.isShaderCache || item.name?.toLowerCase().includes('shader') || cat.id === 'game_caches') && (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3 text-amber-400" />
+                                        <span>ลบแล้วเข้าเกมครั้งแรกจะช้าลง</span>
+                                      </span>
+                                    )}
+                                  </div>
                                   <div className="text-[11px] text-slate-400 font-mono truncate max-w-lg mt-0.5">
                                     {item.path}
                                   </div>
+                                  {(item.isShaderCache || item.name?.toLowerCase().includes('shader')) && (
+                                    <div className="mt-1.5 p-2 rounded-xl bg-amber-950/30 border border-amber-500/30 text-[11px] text-amber-300 flex items-start gap-1.5 max-w-xl">
+                                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                                      <span>
+                                        คำเตือน: หลังลบไฟล์นี้ เมื่อเปิดเข้าเล่นเกมครั้งถัดไป ตัวเกมจะต้อง Compile Shader ใหม่ทั้งหมด ทำให้การเปิดเกมครั้งแรกช้าลงกว่าปกติ (จะกลับมาเร็วตามปกติเมื่อโหลดเสร็จ)
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -4640,6 +4698,13 @@ export default function App() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* =================================================================
+              TAB 4.5: INSTALLED APPS & SMART UNINSTALL
+          ================================================================= */}
+          {activeTab === 'apps' && (
+            <InstalledAppsView theme={theme} onLogIpc={logIpc} />
           )}
 
           {/* =================================================================

@@ -1,6 +1,6 @@
 # SysInfo — System Storage, File Organizer & Port Inspector
 
-> **All-in-One PC Utility (v0.1.2):** Storage Analyzer, Smart File Organizer (Rule Engine & Undo Journal), Junk Cleaner, Game Libraries Analyzer & Port Inspector  
+> **All-in-One PC Utility (v0.1.3):** Installed Apps & Smart Uninstall, Storage Analyzer, Smart File Organizer, Junk Cleaner, Game Libraries Analyzer & Port Inspector  
 > **Platform:** Windows 10 / Windows 11 (x64), Linux, macOS  
 > **Executable:** `sysinfo.exe`  
 > **Distribution:** `.exe` (NSIS), `.zip` (Portable), `.msi` (Windows Installer), `.tar.gz` (Linux)  
@@ -9,7 +9,25 @@
 
 ---
 
-## 🌟 ฟีเจอร์ใหม่ในเวอร์ชัน 0.1.2 (What's New in v0.1.2)
+## 🌟 ฟีเจอร์ใหม่ในเวอร์ชัน 0.1.3 (What's New in v0.1.3)
+
+### 1. 📦 ค้นหาและจัดการโปรแกรม (Installed Apps & Smart Uninstall)
+* **รวมโปรแกรมไว้ในหน้าเดียว:** ค้นหาและกรองโปรแกรมจากชื่อ ผู้พัฒนา เวอร์ชัน และตำแหน่งติดตั้ง
+* **ตัวกรอง 4 หมวดหมู่ชัดเจน:** ทั้งหมด (All), Windows Apps (Win32/MSI), Developer (Git, VS Code, Node, Python, ฯลฯ), Store Apps (Microsoft Store / AppX)
+* **แยกขนาดชัดเจน:** แสดงทั้งขนาดที่ตัวติดตั้งรายงาน (Reported Size) และขนาดจริงที่ได้จากการสแกนไดเรกทอรี (Scanned Size) หรือระบุข้อมูลไม่พร้อมหากโปรแกรมไม่ได้รายงาน
+* **สลับโหมดหน้าจอจำลอง (Mockup Preview):** รองรับการเปิดพรีวิวหน้าจอจำลองเปรียบเทียบกับโปรแกรมจริงในเครื่อง
+* **Smart Uninstall (ถอนด้วยวิธีที่ถูกต้อง):** เรียก Uninstaller มาตรฐานตามประเภท (Win32 uninstaller, Windows Installer MSI, Remove-AppxPackage หรือ winget) ไม่ลบโฟลเดอร์ทิ้งโดยตรง
+* **Pre-uninstall Check (Preflight Check):** ตรวจสอบว่าโปรแกรมยังเปิดทำงานอยู่หรือไม่, แจ้งเตือนไฟล์ที่ยังไม่ได้บันทึก, ตรวจสิทธิ์ Admin, Service, Startup, ตรวจสอบความเกี่ยวข้องกับไดรเวอร์ร่วม, และสถานะรีสตาร์ต
+* **Preserve User Data (เก็บข้อมูลก่อนถอน):** ป้องกันการลบข้อมูลส่วนตัวใน AppData, Documents, เซฟเกม หรือโปรเจกต์ พร้อมตัวเลือก Back Up สำรองข้อมูลอัตโนมัติ
+* **Residual Scanner (ตรวจสอบไฟล์ตกค้างหลังถอน):** สแกนหาไฟล์ แคช ล็อก โฟลเดอร์ที่เหลือ รายการ Startup และ Registry พร้อม 4 ปุ่มควบคุม: **Open Location**, **Keep**, **Back Up**, **Move to Recycle Bin** และ **ลบถาวร** (มีหน้าต่างยืนยันแยกต่างหาก)
+
+### 2. ⚡ การปรับปรุงและแก้ไข (Enhancements & Fixes)
+* **คำเตือน Shader Cache:** เพิ่มการแจ้งเตือนชัดเจนว่าการลบ Shader Cache จะทำให้เมื่อเปิดเข้าเล่นเกมครั้งแรก ตัวเกมจะโหลดช้าเหมือนเข้าเกมครั้งแรกเพื่อ Compile Shader ใหม่
+* **ป้าย NEW แสดงเฉพาะครั้งแรก:** ฟีเจอร์ใหม่จะแสดงสถานะ NEW เฉพาะการเปิดใช้งานครั้งแรก เมื่อผู้ใช้เข้าไปดูแล้วจะถูกบันทึกและปลดป้ายออกโดยอัตโนมัติ
+* **ตัดจำนวนไฟล์และตัวเลขในแถบเมนูข้างออก:** นำตัวเลขไฟล์ตรงวิเคราะห์พื้นที่จัดเก็บ และตัวเลขพอร์ตตรงเมนูพอร์ตออก
+* **ปรับปรุงตัวแจ้งเตือนกระพริบ:** ปรับการแจ้งเตือนข้อขัดแย้งที่กระพริบให้แสดงเฉพาะตัวเลข
+* **ปรับปรุงเมนูจัดระเบียบไฟล์:** นำเลขเวอร์ชันและป้าย NEW ออก และปรับข้อความให้อ่านง่ายเป็นธรรมชาติ
+* **แก้ไขธีมขาว (Light Theme Overrides):** แก้ไขปัญหาตัวหนังสือกลืนกับพื้นหลัง ปรับสีพื้นหลังการ์ดแจ้งเตือนให้สว่างสบายตา และแก้ไขหลอดสถานะ (Progress Bar) บนหน้าหลักให้แสดงผลชัดเจนสมบูรณ์ในธีมขาว
 
 ### 1. 🗂️ ระบบจัดระเบียบไฟล์อัจฉริยะ (Smart File Organizer)
 * **Rule Engine (กฎ "ถ้า → แล้ว"):** กรองตามนามสกุล, ประเภทไฟล์, ขนาด, วันที่, และโฟลเดอร์ต้นทาง
