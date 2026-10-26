@@ -235,3 +235,29 @@ Update (2026-10-25): Version 0.1.2 - Smart File Organizer, SVG Icon & Undo Journ
    - อัปเดต System_Storage_Port_Inspector_Spec.md: §10 (API), §11 (Models), §12 (SQLite Tables), §15.3 (Safety Tests), §15.4 (Acceptance Criteria), Phase 4.5 (File Organizer)
    - สร้างเอกสารวิกิบน GitHub ใน docs/wiki/ (Home.md, File-Organizer-Guide.md, Rule-Engine-and-Templates.md, Architecture-and-Safety.md)
    - อัปเดตเวอร์ชันเป็น v0.1.2 ใน package.json, package-lock.json, wix/Product.wxs, App.tsx, README.md
+
+
+================================================================================
+Update (2026-10-26): Version 0.1.3 - Installed Apps & Smart Uninstall, Shader Cache Warning & UI Refinements
+================================================================================
+1. หน้าจัดการโปรแกรม (Installed Apps) & Smart Uninstall:
+   - รวมโปรแกรมไว้ในหน้าเดียว: ค้นหาจากชื่อ ผู้พัฒนา เวอร์ชัน ตำแหน่งติดตั้ง
+   - 4 หมวดหมู่ตัวกรอง: ทั้งหมด, Windows Apps, Developer, Store Apps
+   - ระบบหน้าจอจำลอง (Mockup Mode) และระบบสแกน Registry & Store Packages จริง
+   - แยกขนาดชัดเจนระหว่าง ขนาดที่ตัวติดตั้งรายงาน (Reported Size) กับ ขนาดสแกนโฟลเดอร์จริง (Scanned Size)
+   - Pre-uninstall Check (Preflight Check): ตรวจสอบโปรเซสที่กำลังเปิด, เตือนบันทึกไฟล์, ตรวจสิทธิ์ Admin, Windows Service, และการรีสตาร์ต
+   - Preserve User Data: ถอนเฉพาะตัวโปรแกรมและเก็บข้อมูลผู้ใช้ไว้ก่อนเป็นค่าเริ่มต้น พร้อมตัวเลือกสำรองข้อมูลอัตโนมัติ (Back Up)
+   - Standard Uninstaller: เรียกตัวถอนติดตั้งมาตรฐาน (Win32, MSI, Store AppX)
+   - Residual Scanner: สแกนหา Cache, Log, โฟลเดอร์ตกค้าง, AppData, Registry พร้อม 5 ปุ่มควบคุม (Open Location, Keep, Back Up, Move to Recycle Bin, ลบถาวร)
+
+2. ปรับปรุง UI และฟีเจอร์ย่อย:
+   - นำตัวเลขจำนวนไฟล์ในแถบเมนู "วิเคราะห์พื้นที่จัดเก็บ" ออก
+   - นำตัวเลขพอร์ตในแถบเมนู "พอร์ต & โปรแกรมพื้นหลัง" ออก
+   - ส่วนแจ้งเตือนกระพริบ ปรับให้แสดงเฉพาะตัวเลขเพียวๆ
+   - นำคำว่า "100%" ออก ปรับถ้อยคำให้เป็นธรรมชาติ ไม่เป็น AI
+   - นำป้าย NEW ในเมนูจัดการไฟล์ออก
+   - เพิ่มป้าย NEW สำหรับฟีเจอร์ใหม่ โดยจะแสดงเฉพาะการเข้าใช้งานครั้งแรก (One-time Seen)
+   - เพิ่มป้ายและกล่องแจ้งเตือน Shader Cache: ลบแล้วเข้าเกมครั้งแรกจะช้าลง เพราะต้อง Compile Shader ใหม่
+   - แก้ไขโหมดธีมขาว (Light Theme): ปรับคอนทราสต์ตัวหนังสือให้ชัดเจน และแก้ไขหลอดสถานะ Progress Bar ให้แสดงผลถูกต้อง
+   - อัปเดตตัวติดตั้งเป็นเวอร์ชัน 0.1.3 (NSIS .exe, Portable .zip, MSI .msi)
+
