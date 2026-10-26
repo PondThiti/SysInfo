@@ -3521,6 +3521,491 @@ async function manageResidualItem(action, itemPath) {
   }
 }
 
+// ==============================================================================
+// DRIVE HEALTH & S.M.A.R.T. MONITOR (v0.1.4)
+// Standalone Feature Spec: Read-Only, Physical Disk Enumeration & Capability-Driven S.M.A.R.T.
+// ==============================================================================
+
+function getDriveHealthStorageDir() {
+  const appData = process.env.APPDATA || (process.platform === 'darwin' ? path.join(os.homedir(), 'Library/Preferences') : path.join(os.homedir(), '.local/share'));
+  const targetDir = path.join(appData, 'SysInfo', 'drive_health');
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+  return targetDir;
+}
+
+function getDriveHealthHistoryFile() {
+  return path.join(getDriveHealthStorageDir(), 'history.json');
+}
+
+function loadDriveHealthHistory() {
+  try {
+    const file = getDriveHealthHistoryFile();
+    if (fs.existsSync(file)) {
+      return JSON.parse(fs.readFileSync(file, 'utf8') || '{}');
+    }
+  } catch (e) {
+    console.error('Failed to load drive health history:', e);
+  }
+  return {};
+}
+
+function saveDriveHealthHistory(history) {
+  try {
+    const file = getDriveHealthHistoryFile();
+    fs.writeFileSync(file, JSON.stringify(history, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Failed to save drive health history:', e);
+  }
+}
+
+async function listPhysicalDrives() {
+  const script = `
+    $pDisks = @(Get-PhysicalDisk -ErrorAction SilentlyContinue | Select-Object DeviceId, FriendlyName, MediaType, BusType, Size, OperationalStatus, HealthStatus, SerialNumber, Model, Manufacturer, FirmwareVersion);
+    $disks = @(Get-Disk -ErrorAction SilentlyContinue | Select-Object Number, FriendlyName, OperationalStatus, HealthStatus, BusType, PartitionStyle, TotalSize, AllocatedSize, IsBoot, IsSystem);
+    $parts = @(Get-Partition -ErrorAction SilentlyContinue | Select-Object DiskNumber, PartitionNumber, DriveLetter, Size, Type);
+    [PSCustomObject]@{ PhysicalDisks = $pDisks; Disks = $disks; Partitions = $parts } | ConvertTo-Json -Depth 4
+  `;
+
+  let res = await runPowerShell(script);
+  let pDisks = [];
+  let disks = [];
+  let partitions = [];
+
+  if (res.success && res.data) {
+    pDisks = Array.isArray(res.data.PhysicalDisks) ? res.data.PhysicalDisks : (res.data.PhysicalDisks ? [res.data.PhysicalDisks] : []);
+    disks = Array.isArray(res.data.Disks) ? res.data.Disks : (res.data.Disks ? [res.data.Disks] : []);
+    partitions = Array.isArray(res.data.Partitions) ? res.data.Partitions : (res.data.Partitions ? [res.data.Partitions] : []);
+  }
+
+  // Fallback to Win32_DiskDrive if Get-PhysicalDisk returned nothing
+  if (pDisks.length === 0) {
+    const fallbackScript = `
+      Get-CimInstance Win32_DiskDrive | Select-Object Index, DeviceId, Model, InterfaceType, MediaType, Size, Status, Partitions, SerialNumber, Manufacturer | ConvertTo-Json
+    `;
+    const fallbackRes = await runPowerShell(fallbackScript);
+    if (fallbackRes.success && fallbackRes.data) {
+      const wmiList = Array.isArray(fallbackRes.data) ? fallbackRes.data : [fallbackRes.data];
+      pDisks = wmiList.map(w => ({
+        DeviceId: String(w.Index),
+        FriendlyName: w.Model || 'Physical Drive ' + w.Index,
+        Model: w.Model || '',
+        Manufacturer: w.Manufacturer || '',
+        MediaType: (w.MediaType || '').toLowerCase().includes('fixed') ? 'SSD' : 'HDD',
+        BusType: w.InterfaceType === 'SCSI' && (w.Model || '').toLowerCase().includes('nvme') ? 'NVMe' : (w.InterfaceType || 'Unknown'),
+        Size: w.Size || 0,
+        OperationalStatus: w.Status === 'OK' ? 'OK' : 'Unknown',
+        HealthStatus: w.Status === 'OK' ? 'Healthy' : 'Warning',
+        SerialNumber: w.SerialNumber || '',
+        FirmwareVersion: ''
+      }));
+    }
+  }
+
+  return pDisks.map((p) => {
+    const devId = String(p.DeviceId ?? '');
+    const matchedDisk = disks.find(d => String(d.Number) === devId) || {};
+    const matchedParts = partitions
+      .filter(part => String(part.DiskNumber) === devId)
+      .map(part => ({
+        driveLetter: part.DriveLetter ? `${part.DriveLetter}:` : null,
+        partitionNumber: part.PartitionNumber,
+        sizeBytes: Number(part.Size || 0),
+        sizeGB: Number(((part.Size || 0) / (1024 ** 3)).toFixed(1)),
+        type: part.Type || 'Unknown'
+      }));
+
+    // Normalize Media Type
+    const rawMedia = (p.MediaType || '').toString().trim();
+    let mediaType = 'unknown';
+    const mediaLower = rawMedia.toLowerCase();
+    const friendlyLower = (p.FriendlyName || '').toLowerCase();
+    if (mediaLower.includes('ssd') || friendlyLower.includes('nvme') || friendlyLower.includes('ssd')) {
+      mediaType = 'ssd';
+    } else if (mediaLower.includes('hdd') || mediaLower.includes('hard disk') || friendlyLower.includes('hdd') || friendlyLower.includes('wdc') || friendlyLower.includes('barracuda')) {
+      mediaType = 'hdd';
+    } else if (rawMedia) {
+      mediaType = 'other';
+    }
+
+    // Normalize Bus Type
+    const rawBus = (p.BusType || matchedDisk.BusType || '').toString().trim();
+    const busLower = rawBus.toLowerCase();
+    let busType = 'unknown';
+    if (busLower.includes('nvme') || friendlyLower.includes('nvme')) {
+      busType = 'nvme';
+    } else if (busLower.includes('sata') || busLower.includes('ata') || busLower.includes('ide')) {
+      busType = 'sata';
+    } else if (busLower.includes('usb')) {
+      busType = 'usb';
+    } else if (busLower.includes('raid')) {
+      busType = 'raid';
+    } else if (busLower.includes('virtual') || busLower.includes('vhd')) {
+      busType = 'virtual';
+    } else if (busLower.includes('sas') || busLower.includes('scsi')) {
+      busType = 'sas';
+    } else if (rawBus) {
+      busType = 'other';
+    }
+
+    // Health Status
+    const rawHealth = (p.HealthStatus || matchedDisk.HealthStatus || '').toString().trim();
+    const rawOp = (p.OperationalStatus || matchedDisk.OperationalStatus || '').toString().trim();
+    let healthStatus = 'unknown';
+    if (rawHealth.toLowerCase() === 'healthy' || rawOp.toLowerCase() === 'ok' || rawOp.toLowerCase() === 'online') {
+      healthStatus = 'healthy';
+    } else if (rawHealth.toLowerCase() === 'warning' || rawOp.toLowerCase() === 'degraded') {
+      healthStatus = 'warning';
+    } else if (rawHealth.toLowerCase() === 'unhealthy' || rawOp.toLowerCase().includes('error') || rawOp.toLowerCase().includes('fail')) {
+      healthStatus = 'critical';
+    }
+
+    const sizeBytes = Number(p.Size || matchedDisk.AllocatedSize || matchedDisk.TotalSize || 0);
+    const sizeGB = Number((sizeBytes / (1024 ** 3)).toFixed(1));
+
+    // Mask Serial Number for Privacy (as required by Spec 8.1 & 10)
+    const rawSerial = (p.SerialNumber || '').trim();
+    const maskedSerial = rawSerial.length > 6
+      ? `${rawSerial.substring(0, 3)}***${rawSerial.substring(rawSerial.length - 3)}`
+      : (rawSerial ? '***' : 'Unavailable');
+
+    return {
+      deviceId: devId,
+      friendlyName: p.FriendlyName || p.Model || `Physical Drive ${devId}`,
+      manufacturer: p.Manufacturer || (busType === 'nvme' ? 'NVMe' : 'Unknown'),
+      model: p.Model || p.FriendlyName || `Drive #${devId}`,
+      firmwareRevision: p.FirmwareVersion || 'Unknown',
+      mediaType,
+      rawMediaType: rawMedia || 'Unknown',
+      busType,
+      rawBusType: rawBus || 'Unknown',
+      sizeBytes,
+      sizeGB,
+      healthStatus,
+      operationalStatus: rawOp || 'Unknown',
+      isRemovable: busType === 'usb' || !!matchedDisk.IsRemovable,
+      isVirtual: busType === 'virtual' || (rawBus.toLowerCase().includes('virtual')),
+      isBoot: !!matchedDisk.IsBoot,
+      isSystem: !!matchedDisk.IsSystem,
+      partitionStyle: matchedDisk.PartitionStyle || 'Unknown',
+      partitions: matchedParts,
+      maskedSerial,
+      dataSource: 'Windows Storage API (MSFT_PhysicalDisk & CIM)',
+      lastSeenAt: new Date().toISOString()
+    };
+  });
+}
+
+async function getDriveHealth(deviceId) {
+  const safeId = String(deviceId || '0').replace(/[^0-9]/g, '');
+  const script = `
+    $devId = "${safeId}";
+    $wmiDisk = Get-CimInstance Win32_DiskDrive -ErrorAction SilentlyContinue | Where-Object { $_.Index -eq [int]$devId };
+    try {
+      $pDisk = Get-PhysicalDisk -ErrorAction Stop | Where-Object { $_.DeviceId -eq $devId };
+      if (-not $pDisk) {
+        $pDisk = Get-PhysicalDisk -ErrorAction Stop | Select-Object -First 1;
+      }
+      $counters = $pDisk | Get-StorageReliabilityCounter -ErrorAction Stop | Select-Object Temperature, TemperatureMax, Wear, PowerOnHours, ReadErrorsTotal, ReadErrorsUncorrected, WriteErrorsTotal, WriteErrorsUncorrected, FlushLatencyMax;
+      [PSCustomObject]@{
+        Success = $true
+        Counters = $counters
+        HealthStatus = $pDisk.HealthStatus
+        OperationalStatus = $pDisk.OperationalStatus
+        BusType = $pDisk.BusType
+        MediaType = $pDisk.MediaType
+        Model = $pDisk.Model
+        Firmware = $pDisk.FirmwareVersion
+      } | ConvertTo-Json
+    } catch {
+      [PSCustomObject]@{
+        Success = $false
+        Error = $_.Exception.Message
+        Category = if ($_.CategoryInfo) { $_.CategoryInfo.Category.ToString() } else { "Unknown" }
+        WmiStatus = if ($wmiDisk) { $wmiDisk.Status } else { "Unknown" }
+        WmiError = if ($wmiDisk) { $wmiDisk.ConfigManagerErrorCode } else { 0 }
+      } | ConvertTo-Json
+    }
+  `;
+
+  const res = await runPowerShell(script);
+  const now = new Date().toISOString();
+
+  // Load history to compute deltas
+  const history = loadDriveHealthHistory();
+  const deviceHistory = history[safeId] || [];
+  const prevSnapshot = deviceHistory[0] || null;
+
+  let overallStatus = 'unknown';
+  let dataCoverage = 'partial';
+  const metrics = [];
+  const reasons = [];
+  let backupRecommended = false;
+
+  if (res.success && res.data && res.data.Success && res.data.Counters) {
+    const c = res.data.Counters;
+    const isNvme = (res.data.BusType || '').toLowerCase().includes('nvme');
+    const isSsd = (res.data.MediaType || '').toLowerCase().includes('ssd') || isNvme;
+
+    // 1. Temperature
+    if (c.Temperature != null && c.Temperature > 0) {
+      const tVal = Number(c.Temperature);
+      let tStatus = 'healthy';
+      if (tVal >= 75) {
+        tStatus = 'critical';
+        reasons.push(`อุณหภูมิวิกฤตสูงถึง ${tVal} °C (เกินเกณฑ์ความปลอดภัย)`);
+        backupRecommended = true;
+      } else if (tVal >= 60) {
+        tStatus = 'warning';
+        reasons.push(`อุณหภูมิอยู่ในเกณฑ์เฝ้าระวัง (${tVal} °C)`);
+      }
+      metrics.push({
+        id: 'temperature_celsius',
+        name: 'อุณหภูมิ (Temperature)',
+        value: tVal,
+        unit: '°C',
+        rawName: 'Temperature',
+        source: 'MSFT_StorageReliabilityCounter.Temperature',
+        status: 'available',
+        healthLevel: tStatus,
+        meaning: 'อุณหภูมิความร้อนปัจจุบันของคอนโทรลเลอร์และชิปจัดเก็บข้อมูล'
+      });
+    } else {
+      metrics.push({
+        id: 'temperature_celsius',
+        name: 'อุณหภูมิ (Temperature)',
+        value: null,
+        unit: '°C',
+        rawName: 'Temperature',
+        source: 'MSFT_StorageReliabilityCounter',
+        status: 'unsupported',
+        meaning: 'ไดรฟ์หรือการเชื่อมต่อนี้ไม่ได้เปิดเผยตัววัดอุณหภูมิ'
+      });
+    }
+
+    // 2. Wear / Percentage Used
+    if (c.Wear != null) {
+      const wearVal = Number(c.Wear);
+      let wStatus = 'healthy';
+      if (wearVal >= 98) {
+        wStatus = 'critical';
+        reasons.push(`ความทนทานถูกใช้ไปแล้วถึง ${wearVal}% ใกล้หมดอายุขัยของเซลล์เก็บข้อมูล`);
+        backupRecommended = true;
+      } else if (wearVal >= 85) {
+        wStatus = 'warning';
+        reasons.push(`ความทนทานถูกใช้ไปแล้ว ${wearVal}% ควรวางแผนสำรองข้อมูล`);
+      }
+      metrics.push({
+        id: isNvme ? 'percentage_used' : 'wear_percent',
+        name: isNvme ? 'Percentage Used (NVMe Wear)' : 'อัตราการสึกหรอ (Wear Level)',
+        value: wearVal,
+        unit: '%',
+        rawName: 'Wear',
+        source: 'MSFT_StorageReliabilityCounter.Wear',
+        status: 'available',
+        healthLevel: wStatus,
+        meaning: isNvme
+          ? 'ค่าประมาณการใช้ความทนทานตามมาตรฐาน NVMe (Percentage Used) ไม่ใช่เปอร์เซ็นต์พื้นที่ดิสก์ที่เต็ม'
+          : 'ระดับการสึกหรอของสื่อจัดเก็บข้อมูลตามที่คอนโทรลเลอร์ประเมิน'
+      });
+    }
+
+    // 3. Power On Hours
+    if (c.PowerOnHours != null) {
+      metrics.push({
+        id: 'power_on_hours',
+        name: 'ชั่วโมงเปิดใช้งาน (Power On Hours)',
+        value: Number(c.PowerOnHours),
+        unit: 'ชั่วโมง',
+        rawName: 'PowerOnHours',
+        source: 'MSFT_StorageReliabilityCounter.PowerOnHours',
+        status: 'available',
+        meaning: 'จำนวนชั่วโมงรวมทั้งหมดที่ไดรฟ์นี้ได้รับกระแสไฟและทำงานสะสม'
+      });
+    }
+
+    // 4. Read Errors
+    const readTotal = c.ReadErrorsTotal != null ? Number(c.ReadErrorsTotal) : null;
+    const readUncorrected = c.ReadErrorsUncorrected != null ? Number(c.ReadErrorsUncorrected) : null;
+    if (readTotal != null) {
+      const prevRead = prevSnapshot?.metrics?.find(m => m.id === 'read_errors_total')?.value ?? null;
+      const delta = (prevRead != null && readTotal >= prevRead) ? readTotal - prevRead : 0;
+      metrics.push({
+        id: 'read_errors_total',
+        name: 'ข้อผิดพลาดการอ่านสะสม (Read Errors)',
+        value: readTotal,
+        delta,
+        unit: 'ครั้ง',
+        rawName: 'ReadErrorsTotal',
+        source: 'MSFT_StorageReliabilityCounter.ReadErrorsTotal',
+        status: 'available',
+        healthLevel: (readUncorrected && readUncorrected > 0) ? 'critical' : 'healthy',
+        meaning: 'จำนวนข้อผิดพลาดที่เกิดขึ้นขณะพยายามอ่านข้อมูลจากแผ่นจานหรือชิป'
+      });
+    }
+
+    if (readUncorrected != null && readUncorrected > 0) {
+      reasons.push(`พบข้อผิดพลาดการอ่านที่ไม่สามารถแก้ไขได้ (${readUncorrected} ครั้ง) ข้อมูลอาจสูญหาย`);
+      backupRecommended = true;
+      metrics.push({
+        id: 'read_errors_uncorrected',
+        name: 'ข้อผิดพลาดอ่านไม่สำเร็จ (Uncorrected Read Errors)',
+        value: readUncorrected,
+        unit: 'ครั้ง',
+        rawName: 'ReadErrorsUncorrected',
+        source: 'MSFT_StorageReliabilityCounter.ReadErrorsUncorrected',
+        status: 'available',
+        healthLevel: 'critical',
+        meaning: 'ข้อผิดพลาดการอ่านที่อัลกอริทึม ECC ของฮาร์ดแวร์กู้คืนไม่ได้โดยตรง'
+      });
+    }
+
+    // 5. Write Errors
+    const writeTotal = c.WriteErrorsTotal != null ? Number(c.WriteErrorsTotal) : null;
+    const writeUncorrected = c.WriteErrorsUncorrected != null ? Number(c.WriteErrorsUncorrected) : null;
+    if (writeTotal != null) {
+      const prevWrite = prevSnapshot?.metrics?.find(m => m.id === 'write_errors_total')?.value ?? null;
+      const delta = (prevWrite != null && writeTotal >= prevWrite) ? writeTotal - prevWrite : 0;
+      metrics.push({
+        id: 'write_errors_total',
+        name: 'ข้อผิดพลาดการเขียนสะสม (Write Errors)',
+        value: writeTotal,
+        delta,
+        unit: 'ครั้ง',
+        rawName: 'WriteErrorsTotal',
+        source: 'MSFT_StorageReliabilityCounter.WriteErrorsTotal',
+        status: 'available',
+        healthLevel: (writeUncorrected && writeUncorrected > 0) ? 'critical' : 'healthy',
+        meaning: 'จำนวนข้อผิดพลาดที่เกิดขึ้นขณะเขียนบล็อกหรือเซกเตอร์'
+      });
+    }
+
+    if (writeUncorrected != null && writeUncorrected > 0) {
+      reasons.push(`พบข้อผิดพลาดการเขียนที่ไม่สามารถแก้ไขได้ (${writeUncorrected} ครั้ง) สื่อบันทึกอาจเสียหาย`);
+      backupRecommended = true;
+      metrics.push({
+        id: 'write_errors_uncorrected',
+        name: 'ข้อผิดพลาดเขียนไม่สำเร็จ (Uncorrected Write Errors)',
+        value: writeUncorrected,
+        unit: 'ครั้ง',
+        rawName: 'WriteErrorsUncorrected',
+        source: 'MSFT_StorageReliabilityCounter.WriteErrorsUncorrected',
+        status: 'available',
+        healthLevel: 'critical',
+        meaning: 'ข้อผิดพลาดการเขียนที่สื่อไม่สามารถยืนยันความถูกต้องของข้อมูลได้'
+      });
+    }
+
+    // Determine overall status
+    if (reasons.some(r => r.includes('วิกฤต') || r.includes('ไม่สามารถแก้ไขได้'))) {
+      overallStatus = 'critical';
+    } else if (reasons.length > 0) {
+      overallStatus = 'warning';
+    } else {
+      overallStatus = 'healthy';
+      reasons.push('ไม่พบสัญญาณเตือนจากข้อมูลที่อ่านได้');
+      reasons.push('ตัวชี้วัด S.M.A.R.T. และ Reliability Counters ทำงานในสภาวะปกติ');
+    }
+
+    dataCoverage = metrics.filter(m => m.status === 'available').length >= 3 ? 'complete' : 'partial';
+
+  } else {
+    // Non-success or fallback (e.g. PermissionDenied or Unsupported)
+    const category = res.data?.Category || 'Unknown';
+    const wmiStatus = res.data?.WmiStatus || 'OK';
+
+    if (category === 'PermissionDenied') {
+      dataCoverage = 'permission_denied';
+      overallStatus = (wmiStatus === 'OK') ? 'healthy' : 'warning';
+      reasons.push(
+        wmiStatus === 'OK'
+          ? 'ไดรฟ์รายงานสถานะการทำงานปกติ (Status: OK ผ่าน Windows Storage Subsystem)'
+          : `สถานะจากระบบรายงาน: ${wmiStatus}`
+      );
+      reasons.push(
+        'ต้องการสิทธิ์ผู้ดูแลระบบ (Run as Administrator) เพื่อดึงตัวชี้วัด S.M.A.R.T. Reliability Counters เชิงลึก'
+      );
+
+      // Add informative capability-driven placeholders
+      metrics.push({
+        id: 'temperature_celsius',
+        name: 'อุณหภูมิ (Temperature)',
+        value: null,
+        unit: '°C',
+        rawName: 'Temperature',
+        source: 'MSFT_StorageReliabilityCounter',
+        status: 'permission_denied',
+        meaning: 'ต้องการสิทธิ์ Administrator เพื่อเข้าถึงเซ็นเซอร์อุณหภูมิฮาร์ดแวร์'
+      });
+      metrics.push({
+        id: 'wear_percent',
+        name: 'อัตราการสึกหรอ / Percentage Used',
+        value: null,
+        unit: '%',
+        rawName: 'Wear',
+        source: 'MSFT_StorageReliabilityCounter',
+        status: 'permission_denied',
+        meaning: 'ต้องการสิทธิ์ Administrator เพื่ออ่านค่าความทนทานจาก Storage Provider'
+      });
+      metrics.push({
+        id: 'power_on_hours',
+        name: 'ชั่วโมงเปิดใช้งาน (Power On Hours)',
+        value: null,
+        unit: 'ชั่วโมง',
+        rawName: 'PowerOnHours',
+        source: 'MSFT_StorageReliabilityCounter',
+        status: 'permission_denied',
+        meaning: 'ต้องการสิทธิ์ Administrator เพื่ออ่านชั่วโมงการทำงานสะสม'
+      });
+      metrics.push({
+        id: 'read_errors_total',
+        name: 'ข้อผิดพลาดการอ่าน/เขียน (Error Counters)',
+        value: null,
+        unit: 'ครั้ง',
+        rawName: 'ReadErrorsTotal',
+        source: 'MSFT_StorageReliabilityCounter',
+        status: 'permission_denied',
+        meaning: 'ต้องการสิทธิ์ Administrator เพื่ออ่านตัวนับข้อผิดพลาดฮาร์ดแวร์'
+      });
+
+    } else {
+      dataCoverage = 'unsupported';
+      overallStatus = 'unknown';
+      reasons.push('อุปกรณ์หรือการเชื่อมต่อนี้ไม่เปิดเผยข้อมูล S.M.A.R.T. ผ่าน USB bridge หรือ Storage Provider');
+      reasons.push('ระบบ Read-only จะไม่บังคับส่งคำสั่งทดสอบที่ไม่ปลอดภัยไปยังอุปกรณ์');
+    }
+  }
+
+  const snapshot = {
+    deviceId: safeId,
+    checkedAt: now,
+    overallStatus,
+    dataCoverage,
+    metrics,
+    reasons,
+    backupRecommended,
+    dataSource: 'MSFT_StorageReliabilityCounter & Get-PhysicalDisk',
+    hasAdminRights: dataCoverage !== 'permission_denied'
+  };
+
+  // Save to history (keep max 30 records per device)
+  if (!history[safeId]) history[safeId] = [];
+  history[safeId].unshift(snapshot);
+  if (history[safeId].length > 30) {
+    history[safeId] = history[safeId].slice(0, 30);
+  }
+  saveDriveHealthHistory(history);
+
+  return snapshot;
+}
+
+async function getDriveHealthHistory(deviceId) {
+  const safeId = String(deviceId || '0').replace(/[^0-9]/g, '');
+  const history = loadDriveHealthHistory();
+  return history[safeId] || [];
+}
+
 module.exports = {
   getSystemDrives,
   getSystemTelemetry,
@@ -3560,5 +4045,8 @@ module.exports = {
   preflightUninstallCheck,
   smartUninstallApp,
   scanResiduals,
-  manageResidualItem
+  manageResidualItem,
+  listPhysicalDrives,
+  getDriveHealth,
+  getDriveHealthHistory
 };

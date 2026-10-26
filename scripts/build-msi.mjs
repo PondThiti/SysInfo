@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-const version = pkg.version || '0.1.3';
+const version = pkg.version || '0.1.4';
 
 console.log(`=== Building SysInfo v${version} MSI Installer ===\n`);
 

@@ -47,5 +47,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   preflightUninstallCheck: (appInfo) => ipcRenderer.invoke('preflight-uninstall-check', appInfo),
   smartUninstallApp: (appInfo, options) => ipcRenderer.invoke('smart-uninstall-app', appInfo, options),
   scanResiduals: (appInfo) => ipcRenderer.invoke('scan-residuals', appInfo),
-  manageResidualItem: (action, itemPath) => ipcRenderer.invoke('manage-residual-item', action, itemPath)
+  manageResidualItem: (action, itemPath) => ipcRenderer.invoke('manage-residual-item', action, itemPath),
+  listPhysicalDrives: () => ipcRenderer.invoke('list-physical-drives'),
+  getDriveHealth: (deviceId) => ipcRenderer.invoke('get-drive-health', deviceId),
+  refreshDriveHealth: (deviceId) => ipcRenderer.invoke('refresh-drive-health', deviceId),
+  getDriveHealthHistory: (deviceId) => ipcRenderer.invoke('get-drive-health-history', deviceId)
 });

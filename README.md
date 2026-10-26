@@ -1,6 +1,6 @@
 # SysInfo — System Storage, File Organizer & Port Inspector
 
-> **All-in-One PC Utility (v0.1.3):** Installed Apps & Smart Uninstall, Storage Analyzer, Smart File Organizer, Junk Cleaner, Game Libraries Analyzer & Port Inspector  
+> **All-in-One PC Utility (v0.1.4):** Drive Health & S.M.A.R.T. Monitor, Installed Apps & Smart Uninstall, Storage Analyzer, Smart File Organizer, Junk Cleaner, Game Libraries Analyzer & Port Inspector  
 > **Platform:** Windows 10 / Windows 11 (x64), Linux, macOS  
 > **Executable:** `sysinfo.exe`  
 > **Distribution:** `.exe` (NSIS), `.zip` (Portable), `.msi` (Windows Installer), `.tar.gz` (Linux)  
@@ -9,7 +9,31 @@
 
 ---
 
-## 🌟 ฟีเจอร์ใหม่ในเวอร์ชัน 0.1.3 (What's New in v0.1.3)
+## 🌟 ฟีเจอร์ใหม่ในเวอร์ชัน 0.1.4 (What's New in v0.1.4)
+
+### 1. 🩺 ระบบตรวจสุขภาพอุปกรณ์จัดเก็บข้อมูล (Drive Health & S.M.A.R.T. Monitor)
+* **ตรวจพบ Physical Drive จริงทุกตัว:** แยก Physical Device ออกจาก Drive Letter, Volume และ Partition อย่างชัดเจน
+* **จำแนกชนิดสื่อและบัสแยกมิติ:** แสดงชนิดสื่อ (SSD, HDD, Unknown) และอินเทอร์เฟซ (NVMe, SATA, USB, RAID, Virtual) เช่น `SSD · NVMe` หรือ `SSD · USB`
+* **Capability-Driven Metrics:** แสดงเฉพาะตัวชี้วัดที่ฮาร์ดแวร์เปิดเผยจริง ไม่สุ่มเดาเลข 0 และไม่เดาตัวชี้วัดของ NVMe กับ SATA
+  * **NVMe SSD:** Composite Temperature (°C), Percentage Used (NVMe Wear), Available Spare %, ชั่วโมงเปิดใช้งาน (Power On Hours), ข้อผิดพลาดการอ่าน/เขียนสะสม (Read/Write Errors Total & Uncorrected)
+  * **SATA SSD / HDD:** สถานะจาก Windows Storage Management, อุณหภูมิ, ชั่วโมงการทำงาน, ตัวนับข้อผิดพลาด
+  * **External USB & Virtual Disk:** แสดงข้อมูลพื้นฐานพร้อมระบุข้อจำกัดของ USB bridge หรือ Virtual Controller ชัดเจน
+* **Read-Only ปลอดภัย 100%:** ไม่มีการรัน Write Test, ไม่ทำ Benchmark หนัก, ไม่แก้ระบบไฟล์ เพื่อความปลอดภัยสูงสุดต่อข้อมูลของผู้ใช้
+* **Data Coverage แยกจากสถานะสุขภาพ:** ระบุความครบถ้วนของข้อมูล (`complete`, `partial`, `permission_denied`, `unsupported`)
+* **แจ้งเตือนการสำรองข้อมูล (Data Backup Advisory):** เมื่อสถานะเป็น Warning หรือ Critical จะมีแบนเนอร์แจ้งเตือนแนะนำให้สำรองไฟล์สำคัญทันที
+* **ประวัติ Snapshot & ส่วนต่าง (Delta):** บันทึกประวัติตรวจสุขภาพย้อนหลังเพื่อเปรียบเทียบแนวโน้มอุณหภูมิและการเพิ่มขึ้นของข้อผิดพลาด
+
+### 2. 🧹 หน้าล้างไฟล์ขยะ: ปุ่มเลือกทั้งหมด/เอาออกทั้งหมดในแต่ละหัวข้อ (Category Toggle Checkbox)
+* เพิ่มปุ่มติ๊กช่องเดียว (Single Checkbox) ในแถบหัวข้อของแต่ละหมวดหมู่ไฟล์ขยะ (แคชระบบ, แคชเบราว์เซอร์, แคชเกม/Shader ฯลฯ)
+* สามารถกดเลือกรายการทั้งหมดในกลุ่มนั้น หรือยกเลิกการเลือกทั้งหมดได้ทันทีใน 1 คลิก พร้อมรองรับ Indeterminate state
+
+### 3. 🎨 แก้ไขธีมขาว (Light Theme Visibility Fixes)
+* แก้ไขหน้าวิเคราะห์พื้นที่จัดเก็บ (Storage Analyzer) ในธีมขาว ให้ชื่อหมวดหมู่ในดรอปดาวน์ และป้ายหมวดหมู่ในตาราง (`Game`, `Media`, `Archive`, `Binary`, `Dev`, `Other`) แสดงผลคมชัด อ่านง่าย สบายตา ไม่กลืนกับพื้นหลัง
+* แก้ไขสีของ `<option>` ในแท็ก `<select>` บน Windows Chrome/Electron ให้แสดงผลสีดำบนพื้นหลังสีขาวอย่างถูกต้อง
+
+---
+
+## 🌟 ฟีเจอร์ก่อนหน้าในเวอร์ชัน 0.1.3 (v0.1.3 Highlights)
 
 ### 1. 📦 ค้นหาและจัดการโปรแกรม (Installed Apps & Smart Uninstall)
 * **รวมโปรแกรมไว้ในหน้าเดียว:** ค้นหาและกรองโปรแกรมจากชื่อ ผู้พัฒนา เวอร์ชัน และตำแหน่งติดตั้ง
@@ -73,9 +97,9 @@
 
 ไฟล์ตัวติดตั้งถูกส่งออกไปยัง: [`C:\Users\zeroy\Desktop\MyProject\Apps\PC-App\`](file:///C:/Users/zeroy/Desktop/MyProject/Apps/PC-App/)
 
-1. **Windows NSIS Setup (`.exe`):** `SysInfo-Setup-0.1.3.exe` / `SysInfo_Setup.exe`
-2. **Windows Portable Archive (`.zip`):** `SysInfo-0.1.3-win.zip` / `SysInfo_Portable.zip`
-3. **Windows MSI Installer (`.msi`):** `SysInfo-Setup-0.1.3.msi` / `SysInfo_Setup.msi`
+1. **Windows NSIS Setup (`.exe`):** `SysInfo-Setup-0.1.4.exe` / `SysInfo_Setup.exe`
+2. **Windows Portable Archive (`.zip`):** `SysInfo-0.1.4-win.zip` / `SysInfo_Portable.zip`
+3. **Windows MSI Installer (`.msi`):** `SysInfo-Setup-0.1.4.msi` / `SysInfo_Setup.msi`
 4. **Linux Application Package (`.tar.gz`):** `SystemStoragePortInspector_Linux_x64.tar.gz`
 
 ---

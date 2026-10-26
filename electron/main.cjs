@@ -280,6 +280,23 @@ ipcMain.handle('manage-residual-item', async (_event, action, itemPath) => {
   return await systemService.manageResidualItem(action, itemPath);
 });
 
+// Drive Health & S.M.A.R.T. Monitor Handlers
+ipcMain.handle('list-physical-drives', async () => {
+  return await systemService.listPhysicalDrives();
+});
+
+ipcMain.handle('get-drive-health', async (_event, deviceId) => {
+  return await systemService.getDriveHealth(deviceId);
+});
+
+ipcMain.handle('refresh-drive-health', async (_event, deviceId) => {
+  return await systemService.getDriveHealth(deviceId);
+});
+
+ipcMain.handle('get-drive-health-history', async (_event, deviceId) => {
+  return await systemService.getDriveHealthHistory(deviceId);
+});
+
 app.whenReady().then(() => {
   createWindow();
 

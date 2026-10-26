@@ -281,6 +281,36 @@ html.theme-light,
   border-color: #cbd5e1 !important;
 }
 
+.theme-light select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Category badges & accents in Light Mode (fixes hidden/invisible categories in Storage Analyzer) */
+.theme-light .bg-fuchsia-950\/70,
+.theme-light .bg-fuchsia-950\/60,
+.theme-light .bg-fuchsia-950\/50,
+.theme-light .bg-fuchsia-950 {
+  background-color: #fdf4ff !important;
+  border-color: #f0abfc !important;
+}
+
+.theme-light .text-fuchsia-300,
+.theme-light .text-fuchsia-400 {
+  color: #86198f !important;
+}
+
+.theme-light .border-fuchsia-500\/30,
+.theme-light .border-fuchsia-500\/40 {
+  border-color: #f0abfc !important;
+}
+
+.theme-light .storage-cat-badge {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+  border-color: #cbd5e1 !important;
+}
+
 .theme-light input::placeholder {
   color: #94a3b8 !important;
 }

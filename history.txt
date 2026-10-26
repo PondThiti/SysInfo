@@ -261,3 +261,31 @@ Update (2026-10-26): Version 0.1.3 - Installed Apps & Smart Uninstall, Shader Ca
    - แก้ไขโหมดธีมขาว (Light Theme): ปรับคอนทราสต์ตัวหนังสือให้ชัดเจน และแก้ไขหลอดสถานะ Progress Bar ให้แสดงผลถูกต้อง
    - อัปเดตตัวติดตั้งเป็นเวอร์ชัน 0.1.3 (NSIS .exe, Portable .zip, MSI .msi)
 
+================================================================================
+Update (2026-10-26): Version 0.1.4 - Drive Health & S.M.A.R.T. Monitor, Junk Cleaner Toggle & Light Theme Fix
+================================================================================
+1. ระบบตรวจสุขภาพอุปกรณ์จัดเก็บข้อมูล (Drive Health & S.M.A.R.T. Monitor):
+   - ตรวจพบ Physical Drive ทุกตัวที่ Windows เปิดเผยได้ แยกจาก Volume/Partition และ Drive Letter ชัดเจน
+   - จำแนกประเภทสื่อ (Media Type: SSD / HDD / Other / Unknown) และอินเทอร์เฟซ (Bus Type: NVMe / SATA / USB / RAID / Virtual) แยกกันเป็นอิสระ
+   - Capability-Driven Metrics: แสดงเฉพาะตัวชี้วัดที่อุปกรณ์เปิดเผยจริง ไม่สุ่มเดาเลข 0 และไม่เดาตัวชี้วัดของ NVMe กับ SATA
+     * NVMe SSD: อุณหภูมิ (Composite Temperature °C), อัตราการสึกหรอ (Percentage Used / Wear %), ชั่วโมงเปิดใช้งาน (Power On Hours), ข้อผิดพลาดการอ่าน/เขียนสะสม (Read/Write Errors Total & Uncorrected)
+     * SATA SSD / HDD: อุณหภูมิ, ชั่วโมงเปิดใช้งาน, ข้อผิดพลาดสะสม
+     * USB / Virtual: แสดงข้อมูลพื้นฐาน พร้อมระบุข้อจำกัดของ USB bridge หรือ Virtual Controller ชัดเจน
+   - Read-only Safe: ปลอดภัยต่อข้อมูล 100% ไม่มีการสั่ง Write Test หรือ Benchmark หนักๆ โดยเด็ดขาด
+   - Data Coverage: แยกความครอบคลุมของข้อมูล (Complete, Partial, Permission Denied, Unsupported) ออกจากสถานะสุขภาพ
+   - แบนเนอร์แจ้งเตือนการสำรองข้อมูล (Data Backup Advisory): เมื่อตรวจพบสถานะ Warning หรือ Critical
+   - ระบบ Snapshot & ประวัติย้อนหลัง: บันทึกข้อมูลและเปรียบเทียบส่วนต่าง (Delta) เมื่อเทียบกับรอบก่อนหน้า
+
+2. หน้าล้างไฟล์ขยะ (Junk Cleaner) - ปุ่มเลือกทั้งหมด/เอาออกทั้งหมดในแต่ละหัวข้อ:
+   - เพิ่มปุ่มติ๊กช่องเดียว (Single Checkbox Toggle) ประจำแต่ละหมวดหมู่ไฟล์ขยะในหน้าล้างไฟล์ขยะ
+   - ติ๊กเพื่อเลือกไฟล์ทั้งหมดในกลุ่ม หรือคลิกซ้ำเพื่อเอาออกทั้งหมดได้ทันที
+
+3. แก้ไขโหมดธีมขาว (Light Theme Visibility Fixes):
+   - แก้ไขหน้าวิเคราะห์พื้นที่จัดเก็บ (Storage Analyzer) ในธีมขาว ให้ชื่อหมวดหมู่ในดรอปดาวน์ และป้ายหมวดหมู่ในตาราง (Game, Media, Archive, Binary, Dev, Other) มีคอนทราสต์สูง มองเห็นชัดเจน 100% ไม่กลืนกับพื้นหลัง
+   - เพิ่มการกำหนดสี <option> ใน <select> สำหรับ Windows Chrome/Electron ให้ตัวหนังสือเป็นสีดำคมชัดบนพื้นหลังสีขาว
+
+4. อัปเดตและปรับแต่งเวอร์ชัน:
+   - อัปเดตเวอร์ชันเป็น 0.1.4 ครบทุกส่วนของโปรแกรม (package.json, package-lock.json, Cargo.toml, Product.wxs, App.tsx, README.md, scripts)
+   - แก้ไขประวัติ Git commit เก่าที่เคยบันทึกผิดเป็น 0.10.3 ให้เรียบร้อย
+   - บิลด์และส่งออกตัวติดตั้ง v0.1.4 ครบทุกรูปแบบ (NSIS .exe, Portable .zip, MSI .msi) ไปยัง C:\Users\zeroy\Desktop\MyProject\Apps\PC-App\ พร้อมล้างไฟล์เก่าออกทั้งหมด
+

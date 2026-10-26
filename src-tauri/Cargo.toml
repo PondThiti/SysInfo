@@ -1,6 +1,6 @@
 [package]
 name = "sysinfo-backend"
-version = "0.1.2"
+version = "0.1.4"
 description = "SysInfo Rust Backend Core - File Organizer & System Inspector"
 edition = "2021"
 
