@@ -52,59 +52,182 @@ html.font-size-xl .text-\[11px\] { font-size: 14px !important; }
    DESIGN TOKENS (CSS VARIABLES) — DASHBOARD STYLE
    ========================================================================== */
 :root {
-  /* Surface Tokens */
-  --bg-canvas: #eceaf6;
-  --bg-card: #ffffff;
-  --bg-card-subtle: #f7f6fc;
-  --bg-dark: #1c1d2b;
-  --bg-dark-card: #25273a;
-  --bg-dark-card-hover: #2e3047;
-  --bg-accent: #5b4ed6;
-  --bg-accent-2: #7b6fe6;
-  --bg-accent-subtle: rgba(91, 78, 214, 0.08);
+  /* พื้นผิว */
+  --bg-canvas:     #e7e5e9;  /* พื้นหลังเนื้อหา เทาอมม่วงจาง */
+  --bg-sidebar:    #ffffff;
+  --bg-card:       #ffffff;
+  --bg-card-dark:  #212224;  /* การ์ด KPI ใบแรก + การ์ดสแกนใน sidebar */
+  --bg-card-dark-2:#2c2d30;  /* ลายจาง/ขอบในการ์ดเข้ม */
+  --bg-pill:       #f3f2f4;  /* ปุ่ม pill ที่ยังไม่เลือก */
+  --bg-selected:   #858386;  /* pill/แท่ง/วันที่ที่เลือก */
 
-  /* Text Tokens */
-  --text: #1b1c2a;
-  --text-muted: #7a7b8c;
-  --text-on-dark: #f2f2f8;
+  /* ตัวอักษร */
+  --text:          #1a1a1c;
+  --text-muted:    #77757b;
+  --text-on-dark:  #f4f4f6;
+  --text-on-selected: #ffffff;
 
-  /* Status Tokens */
-  --ok: #2fa66a;
-  --warn: #e0a31a;
-  --crit: #d9483b;
-  --info: #3b82f6;
+  /* เส้นและเงา */
+  --border:        #d9d7dc;
+  --shadow-card:   0 1px 2px rgba(20,20,24,.04), 0 6px 18px rgba(20,20,24,.05);
+
+  /* กราฟ */
+  --bar:           #232426;  /* แท่งปกติ */
+  --bar-selected:  #858386;  /* แท่งที่เลือก */
+  --ring-track:    #d0ced3;
+  --ring-fill:     #858386;
+
+  /* สถานะ (ใช้เฉพาะสถานะ/ตัวเปลี่ยนแปลง) */
+  --ok:            #2e9f55;
+  --ok-bg:         #e3f3ea;
+  --warn:          #d9a21b;
+  --warn-bg:       #fbf1d6;
+  --crit:          #c0392f;
+  --crit-bg:       #f8e2df;
+  --info:          #3b82f6;
+
+  /* accent จากธีมที่ผู้ใช้เลือก (ค่าเริ่ม = เทาถ่าน ไม่มี accent) */
+  --accent:        #858386;
+  --accent-soft:   #e4e3e6;
 
   /* Shape & Radius Tokens */
-  --r-card: 20px;
-  --r-ctrl: 12px;
-  --r-pill: 999px;
-  --shadow-card: 0 1px 2px rgba(20, 20, 40, 0.04), 0 8px 24px rgba(20, 20, 40, 0.06);
+  --r-card:        20px;
+  --r-ctrl:        12px;
+  --r-pill:        999px;
 
   /* Typography */
   --app-font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Aliases for backwards compatibility */
+  --bg-accent:     var(--accent);
+  --bg-accent-2:   var(--bar-selected);
+  --bg-dark:       var(--bg-card-dark);
 }
 
 :root[data-theme="dark"],
 html.theme-dark,
 .theme-dark {
-  --bg-canvas: #12131c;
-  --bg-card: #1b1c2a;
-  --bg-card-subtle: #222436;
-  --bg-dark: #0e0f17;
-  --bg-dark-card: #161724;
-  --bg-dark-card-hover: #1e2030;
-  --text: #f2f2f8;
-  --text-muted: #9a9bb0;
-  --text-on-dark: #f2f2f8;
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.35);
+  --bg-canvas:     #131315;
+  --bg-sidebar:    #1a1a1d;
+  --bg-card:       #1f1f23;
+  --bg-card-dark:  #0c0c0e;
+  --bg-card-dark-2:#18181b;
+  --bg-pill:       #2a2a2f;
+  --bg-selected:   #6d6b72;
+
+  --text:          #f1f1f4;
+  --text-muted:    #9a98a0;
+  --text-on-dark:  #f4f4f6;
+  --text-on-selected: #ffffff;
+
+  --border:        #2e2e33;
+  --shadow-card:   0 1px 0 rgba(255,255,255,.04) inset, 0 6px 18px rgba(0,0,0,.35);
+
+  --bar:           #d8d7dc;
+  --bar-selected:  #6d6b72;
+  --ring-track:    #35353b;
+  --ring-fill:     #b9b8be;
+
+  --ok-bg:         #17301f;
+  --warn-bg:       #34290c;
+  --crit-bg:       #381a17;
+
+  --accent:        #858386;
+  --accent-soft:   #2a2a2f;
+
+  --bg-accent:     var(--accent);
+  --bg-accent-2:   var(--bar-selected);
+  --bg-dark:       var(--bg-card-dark);
 }
 
 body {
   font-family: var(--app-font-family);
+  background-color: var(--bg-canvas);
+  color: var(--text);
 }
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* Fast 120-180ms transitions */
+.transition-fast,
+button,
+a,
+input,
+select {
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Clean Dashboard Table Headers & Rows */
+table.dashboard-table thead tr,
+.dashboard-table-header {
+  border-top: 1px solid var(--border) !important;
+  border-bottom: 1px solid var(--border) !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+table.dashboard-table thead th,
+.dashboard-table-th {
+  background-color: transparent !important;
+  color: var(--text-muted) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  padding: 10px 16px !important;
+}
+
+table.dashboard-table tbody tr,
+.dashboard-table-row {
+  border-bottom: 1px solid var(--border) !important;
+  transition: background-color 150ms ease !important;
+}
+
+table.dashboard-table tbody tr:hover,
+.dashboard-table-row:hover {
+  background-color: var(--bg-pill) !important;
+}
+
+/* Unified Status Pills */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.status-pill-ok {
+  background-color: var(--ok-bg) !important;
+  color: var(--ok) !important;
+}
+
+.status-pill-warn {
+  background-color: var(--warn-bg) !important;
+  color: var(--warn) !important;
+}
+
+.status-pill-crit {
+  background-color: var(--crit-bg) !important;
+  color: var(--crit) !important;
+}
+
+.status-pill-neutral {
+  background-color: var(--bg-pill) !important;
+  color: var(--text-muted) !important;
+}
+
+/* Ensure Dark Cards retain dark background in all themes */
+.card-dark,
+[data-card-dark="true"] {
+  background-color: var(--bg-card-dark) !important;
+  color: var(--text-on-dark) !important;
 }
 
 /* Custom Select Options High Contrast */
@@ -116,7 +239,7 @@ select option {
 html.theme-light select option,
 .theme-light select option {
   background-color: #ffffff !important;
-  color: #1b1c2a !important;
+  color: #1a1a1c !important;
 }
 
 /* Electron Window Draggable Region */

@@ -306,8 +306,8 @@ export default function InstalledAppsView({
     setIsUninstalling(true);
     setUninstallLogs([
       `เริ่มกระบวนการ Smart Uninstall สำหรับ "${activeApp.name}"`,
-      preserveUserData ? '✓ บันทึกการตั้งค่าและข้อมูลผู้ใช้ไว้ (Preserve User Data: เปิดใช้งาน)' : 'ระบุ: ลบข้อมูลการตั้งค่าของผู้ใช้ออกด้วย',
-      backupUserData ? '💾 ดำเนินการสำรองข้อมูล (Backup User Data) ไปยัง SysInfo_Backups...' : 'ข้ามขั้นตอนการสำรองข้อมูล',
+      preserveUserData ? 'บันทึกการตั้งค่าและข้อมูลผู้ใช้ไว้ (Preserve User Data: เปิดใช้งาน)' : 'ระบุ: ลบข้อมูลการตั้งค่าของผู้ใช้ออกด้วย',
+      backupUserData ? 'ดำเนินการสำรองข้อมูล (Backup User Data) ไปยัง SysInfo_Backups...' : 'ข้ามขั้นตอนการสำรองข้อมูล',
       `ตรวจสอบประเภทตัวติดตั้ง: ${activeApp.installType.toUpperCase()}`,
       activeApp.installType === 'store'
         ? 'เรียกกลไกจัดการแพ็กเกจของ Windows (Remove-AppxPackage)...'
@@ -327,7 +327,7 @@ export default function InstalledAppsView({
           setUninstallSuccess(true);
           setUninstallLogs((prev) => [
             ...prev,
-            '✓ ถอนการติดตั้งผ่านตัวถอนมาตรฐานสำเร็จเรียบร้อย',
+            'ถอนการติดตั้งผ่านตัวถอนมาตรฐานสำเร็จเรียบร้อย',
             'เริ่มเรียก Residual Scanner เพื่อตรวจสอบไฟล์และรีจิสทรีที่อาจตกค้าง...'
           ]);
           // Scan for residuals
@@ -336,7 +336,7 @@ export default function InstalledAppsView({
           setUninstallSuccess(false);
           setUninstallLogs((prev) => [
             ...prev,
-            `⚠️ แจ้งเตือน: ${res.message || 'การถอนการติดตั้งหยุดชะงัก หรือผู้ใช้กดยกเลิกในตัวถอนมาตรฐาน'}`,
+            `แจ้งเตือน: ${res.message || 'การถอนการติดตั้งหยุดชะงัก หรือผู้ใช้กดยกเลิกในตัวถอนมาตรฐาน'}`,
             'เข้าสู่การตรวจสอบไฟล์ตกค้าง...'
           ]);
           runResidualScan(activeApp);
@@ -347,7 +347,7 @@ export default function InstalledAppsView({
           setUninstallSuccess(true);
           setUninstallLogs((prev) => [
             ...prev,
-            '✓ ถอนการติดตั้งผ่านตัวถอนมาตรฐานสำเร็จเรียบร้อย',
+            'ถอนการติดตั้งผ่านตัวถอนมาตรฐานสำเร็จเรียบร้อย',
             'เริ่มเรียก Residual Scanner เพื่อตรวจสอบไฟล์และรีจิสทรีที่อาจตกค้าง...'
           ]);
           runResidualScan(activeApp);
@@ -1128,7 +1128,7 @@ export default function InstalledAppsView({
                   <div className="space-y-3">
                     {residuals.length === 0 ? (
                       <div className="p-8 text-center bg-slate-950/40 rounded-2xl border border-slate-800/80 text-xs text-slate-400">
-                        ✓ ไม่พบไฟล์หรือข้อมูลตกค้าง ระบบสะอาดเรียบร้อย
+                        ไม่พบไฟล์หรือข้อมูลตกค้าง ระบบสะอาดเรียบร้อย
                       </div>
                     ) : (
                       residuals.map((item) => (
@@ -1171,10 +1171,10 @@ export default function InstalledAppsView({
                                       : 'bg-rose-500/20 text-rose-300'
                                   }`}
                                 >
-                                  {item.status === 'kept' && '✓ เก็บไว้ (Keep)'}
-                                  {item.status === 'backed_up' && '✓ สำรองแล้ว (Backed Up)'}
-                                  {item.status === 'recycled' && '✓ ย้ายลงถังขยะแล้ว'}
-                                  {item.status === 'deleted' && '✓ ลบถาวรแล้ว'}
+                                  {item.status === 'kept' && 'เก็บไว้ (Keep)'}
+                                  {item.status === 'backed_up' && 'สำรองแล้ว (Backed Up)'}
+                                  {item.status === 'recycled' && 'ย้ายลงถังขยะแล้ว'}
+                                  {item.status === 'deleted' && 'ลบถาวรแล้ว'}
                                 </span>
                               ) : (
                                 <span className="font-mono text-xs font-bold text-slate-300">

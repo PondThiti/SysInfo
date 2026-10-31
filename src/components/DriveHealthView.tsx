@@ -288,7 +288,7 @@ export const DriveHealthView: React.FC<DriveHealthViewProps> = ({ theme = 'dark'
           <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
           <div className="space-y-1.5 text-xs flex-1">
             <div className="font-bold text-sm text-amber-400 flex items-center gap-2">
-              <span>⚠️ คำแนะนำการสำรองข้อมูลเร่งด่วน (Data Backup Advisory)</span>
+              <span>คำแนะนำการสำรองข้อมูลเร่งด่วน (Data Backup Advisory)</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30">
                 ตรวจพบสัญญาณเฝ้าระวัง
               </span>
@@ -460,10 +460,10 @@ export const DriveHealthView: React.FC<DriveHealthViewProps> = ({ theme = 'dark'
 
                       {/* Coverage status pill */}
                       <span className="text-[10px] text-slate-500 font-medium">
-                        {health?.dataCoverage === 'complete' && '✓ ข้อมูลสุขภาพสมบูรณ์'}
-                        {health?.dataCoverage === 'permission_denied' && '⚠️ ต้องการสิทธิ์ Admin'}
-                        {health?.dataCoverage === 'partial' && '✓ ข้อมูลบางส่วน'}
-                        {health?.dataCoverage === 'unsupported' && '✕ ไม่เปิดเผย SMART'}
+                        {health?.dataCoverage === 'complete' && 'ข้อมูลสุขภาพสมบูรณ์'}
+                        {health?.dataCoverage === 'permission_denied' && 'ต้องการสิทธิ์ Admin'}
+                        {health?.dataCoverage === 'partial' && 'ข้อมูลบางส่วน'}
+                        {health?.dataCoverage === 'unsupported' && 'ไม่เปิดเผย SMART'}
                         {!health && 'กำลังตรวจสอบ...'}
                       </span>
                     </div>

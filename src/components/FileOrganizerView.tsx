@@ -502,7 +502,7 @@ export default function FileOrganizerView({
                   }}
                   className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] transition"
                 >
-                  📥 Downloads
+                  Downloads
                 </button>
                 <button
                   onClick={() => {
@@ -512,7 +512,7 @@ export default function FileOrganizerView({
                   }}
                   className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] transition"
                 >
-                  🖥️ Desktop
+                  Desktop
                 </button>
               </div>
             </div>
@@ -775,7 +775,7 @@ export default function FileOrganizerView({
                     }`}
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    🚀 ดำเนินการย้าย {selectedItems.length} ไฟล์ ({formatSizeDisplay(totalSelectedBytes)})
+                    ดำเนินการย้าย {selectedItems.length} ไฟล์ ({formatSizeDisplay(totalSelectedBytes)})
                   </button>
                 </div>
               </div>
@@ -940,15 +940,15 @@ export default function FileOrganizerView({
                           )}
                         </div>
                         <div className="text-xs text-slate-400 flex items-center gap-3 flex-wrap">
-                          <span>📅 {batch.formattedDate || new Date(batch.createdAt).toLocaleString('th-TH')}</span>
+                          <span>{batch.formattedDate || new Date(batch.createdAt).toLocaleString('th-TH')}</span>
                           <span>•</span>
-                          <span>📄 ย้าย {batch.totalFiles} ไฟล์</span>
+                          <span>ย้าย {batch.totalFiles} ไฟล์</span>
                           <span>•</span>
-                          <span>💾 ขนาด {formatSizeDisplay(batch.totalBytes || 0)}</span>
+                          <span>ขนาด {formatSizeDisplay(batch.totalBytes || 0)}</span>
                           {batch.recycledDuplicates > 0 && (
                             <>
                               <span>•</span>
-                              <span className="text-rose-400">♻️ สำเนาลงถังขยะ {batch.recycledDuplicates} ไฟล์</span>
+                              <span className="text-rose-400">สำเนาลงถังขยะ {batch.recycledDuplicates} ไฟล์</span>
                             </>
                           )}
                         </div>
@@ -1198,7 +1198,7 @@ export default function FileOrganizerView({
                 className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition"
               >
                 <Trash2 className={`w-3.5 h-3.5 ${isCleaningEmpty ? 'animate-spin' : ''}`} />
-                {isCleaningEmpty ? 'กำลังตรวจลบโฟลเดอร์ว่าง...' : '🗑️ ตรวจและลบโฟลเดอร์ว่างเปล่าทันที'}
+                {isCleaningEmpty ? 'กำลังตรวจลบโฟลเดอร์ว่าง...' : 'ตรวจและลบโฟลเดอร์ว่างเปล่าทันที'}
               </button>
               {emptyFoldersCleaned.length > 0 && (
                 <div className="text-[11px] text-emerald-400">

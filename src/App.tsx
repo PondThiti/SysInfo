@@ -3,6 +3,11 @@ import FileOrganizerView from './components/FileOrganizerView';
 import InstalledAppsView from './components/InstalledAppsView';
 import DriveHealthView from './components/DriveHealthView';
 import BetaBadge from './components/BetaBadge';
+import Sidebar from './components/Sidebar';
+import TopHeader from './components/TopHeader';
+import CommandPalette from './components/CommandPalette';
+import NotificationPopover from './components/NotificationPopover';
+import OverviewWidgets from './components/OverviewWidgets';
 import {
   LayoutDashboard,
   HardDrive,
@@ -103,6 +108,36 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [overviewSelectedDrive, setOverviewSelectedDrive] = useState<string>('C:');
   const [overviewDetailTab, setOverviewDetailTab] = useState<'smart' | 'files' | 'folders'>('smart');
+
+  // Sidebar & TopHeader State
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('sysinfo_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('sysinfo_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month' | 'year'>('week');
+  const [lastScanTime, setLastScanTime] = useState<string>(() => {
+    try {
+      return localStorage.getItem('sysinfo_last_scan_time') || 'วันนี้ 11:30 น.';
+    } catch {
+      return 'วันนี้ 11:30 น.';
+    }
+  });
 
   // Seen features state for "NEW" badge (only appears first time until visited)
   const [seenFeatures, setSeenFeatures] = useState<{ [key: string]: boolean }>(() => {
@@ -284,10 +319,106 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('sysinfo_accent_theme', accentTheme);
     const item = ACCENT_OPTIONS.find((a) => a.id === accentTheme) || ACCENT_OPTIONS[0];
+    document.documentElement.style.setProperty('--accent', item.hex);
     document.documentElement.style.setProperty('--bg-accent', item.hex);
     document.documentElement.style.setProperty('--bg-accent-2', item.secondary);
+    document.documentElement.style.setProperty('--bar-selected', item.hex);
+    document.documentElement.style.setProperty('--ring-fill', item.hex);
     document.documentElement.setAttribute('data-accent', accentTheme);
   }, [accentTheme]);
+
+  // Global Keyboard Shortcuts (Ctrl+K for Command Palette)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const headerInfo = useMemo(() => {
+    switch (activeTab) {
+      case 'dashboard':
+        return {
+          title: 'ภาพรวมระบบ (Overview)',
+          subtitle: 'มอนิเตอร์ไดรฟ์จริง ตรวจสุขภาพฮาร์ดแวร์ วิเคราะห์พอร์ต และล้างข้อมูลขยะในเครื่อง',
+          showTimeFilter: true,
+        };
+      case 'health':
+        return {
+          title: 'สุขภาพไดรฟ์ (S.M.A.R.T.)',
+          subtitle: 'ตรวจสอบสถานะความสมบูรณ์ อุณหภูมิ และความทนทานของ SSD/HDD',
+          showTimeFilter: true,
+        };
+      case 'storage':
+        return {
+          title: 'วิเคราะห์พื้นที่จัดเก็บ (Storage Analyzer)',
+          subtitle: 'วิเคราะห์ไฟล์ขนาดใหญ่ สัดส่วนโฟลเดอร์ และจัดกลุ่มไฟล์ซ้ำซ้อน',
+          showTimeFilter: false,
+        };
+      case 'cleaner':
+        return {
+          title: 'ล้างไฟล์ขยะ & แคช (Junk Cleaner)',
+          subtitle: 'ตรวจหาและล้างไฟล์ชั่วคราว แคชเบราว์เซอร์ และ Shader Cache ปลอดภัย',
+          showTimeFilter: false,
+        };
+      case 'organizer':
+        return {
+          title: 'จัดระเบียบไฟล์อัจฉริยะ (File Organizer)',
+          subtitle: 'จัดระเบียบไฟล์ตามกฎอัตโนมัติ พร้อมระบบ Dry-run และ Undo Journal',
+          showTimeFilter: false,
+        };
+      case 'games':
+        return {
+          title: 'จัดการคลังเกมในเครื่อง (Game Libraries)',
+          subtitle: 'ตรวจหาคลังเกมจาก Steam, Epic, Riot, Xbox และย้ายไดรฟ์อย่างปลอดภัย',
+          showTimeFilter: false,
+        };
+      case 'ports':
+        return {
+          title: 'พอร์ต, โปรเซส & ข้อขัดแย้ง (Ports & Conflicts)',
+          subtitle: 'วิเคราะห์พอร์ตที่เปิดใช้งาน โปรเซสเบื้องหลัง และตรวจจับโปรแกรมชนกัน',
+          showTimeFilter: false,
+        };
+      case 'apps':
+        return {
+          title: 'แอปพลิเคชันที่ติดตั้ง (Installed Apps)',
+          subtitle: 'ตรวจขนาดจริงของโปรแกรมที่ติดตั้ง และถอนการติดตั้งอย่างหมดจด',
+          showTimeFilter: false,
+        };
+      case 'settings':
+        return {
+          title: 'ตั้งค่าระบบ (Settings & BETA)',
+          subtitle: 'ปรับแต่งโหมดสีหน้าจอ สีธีม และรูปแบบฟอนต์ของโปรแกรม',
+          showTimeFilter: false,
+        };
+      default:
+        return {
+          title: 'SysInfo',
+          subtitle: 'System Utility for Windows',
+          showTimeFilter: false,
+        };
+    }
+  }, [activeTab]);
+
+  const dateRangeText = useMemo(() => {
+    const today = new Date();
+    if (timeRange === 'day') {
+      return `วันนี้, ${today.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    }
+    if (timeRange === 'week') {
+      const past = new Date(today);
+      past.setDate(today.getDate() - 7);
+      return `${past.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} – ${today.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    }
+    if (timeRange === 'month') {
+      return `1 ${today.toLocaleDateString('th-TH', { month: 'short' })} – ${today.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    }
+    return `มกราคม – ธันวาคม ${today.getFullYear() + 543}`;
+  }, [timeRange]);
 
   useEffect(() => {
     localStorage.setItem('sysinfo_font_family', fontFamily);
@@ -412,6 +543,11 @@ export default function App() {
   const handleTriggerStorageScan = async (drive = selectedDrive, minMB = minHeavyFileSizeMB, depth = scanDepth) => {
     setIsScanningStorage(true);
     setScanProgress(20);
+    const nowTime = `วันนี้ ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.`;
+    setLastScanTime(nowTime);
+    try {
+      localStorage.setItem('sysinfo_last_scan_time', nowTime);
+    } catch {}
     const start = performance.now();
     logIpc('scan_large_files', `เริ่มสแกนค้นหาไฟล์ขนาดใหญ่และสัดส่วนโฟลเดอร์จริงบนไดรฟ์ ${drive}...`);
 
@@ -1476,284 +1612,60 @@ export default function App() {
 
   return (
     <div
-      className={`h-screen w-screen ${theme === 'light' ? 'theme-light' : 'theme-dark'} flex flex-col font-sans selection:bg-[var(--bg-accent)] selection:text-white overflow-hidden select-none`}
+      className={`h-screen w-screen ${theme === 'light' ? 'theme-light' : 'theme-dark'} flex flex-row font-sans selection:bg-[var(--accent)] selection:text-white overflow-hidden select-none`}
       style={{ backgroundColor: 'var(--bg-canvas)', color: 'var(--text)' }}
     >
       {/* =====================================================================
-          CUSTOM FIXED TOP HEADER & CAPSULE NAVIGATION BAR (DASHBOARD STYLE)
+          1. LEFT SIDEBAR NAVIGATION (DASHBOARD STYLE)
       ===================================================================== */}
-      <header className="h-14 shrink-0 bg-white/90 dark:bg-[#0e0f17]/95 border-b border-slate-200/80 dark:border-slate-800/80 px-4 flex items-center justify-between select-none z-40 backdrop-blur titlebar-drag-region">
-        {/* Left: App Logo & Version */}
-        <div className="flex items-center gap-3 no-drag">
-          <div className="w-8 h-8 rounded-xl bg-[var(--bg-accent)] flex items-center justify-center text-white shadow-sm">
-            <Zap className="w-4 h-4 text-white" />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="font-bold tracking-tight text-sm text-slate-900 dark:text-white">SysInfo</span>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--bg-accent)]/15 text-[var(--bg-accent)] dark:text-indigo-300 border border-[var(--bg-accent)]/30 font-semibold tabular-nums">
-              v0.1.5
-            </span>
-          </div>
-        </div>
-
-        {/* Center: Top Capsule Navigation Bar */}
-        <nav className="no-drag hidden md:flex items-center">
-          <div className="p-1 rounded-full bg-slate-100 dark:bg-[#161724] border border-slate-200/80 dark:border-slate-800/80 flex items-center gap-1 shadow-sm">
-            {/* 1. ภาพรวม (Overview) */}
-            <button
-              onClick={() => {
-                setActiveTab('dashboard');
-                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                activeTab === 'dashboard'
-                  ? 'bg-[var(--bg-accent)] text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
-              }`}
-            >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>ภาพรวม</span>
-            </button>
-
-            {/* 2. ไดรฟ์ (Drive Health) */}
-            <button
-              onClick={() => {
-                setActiveTab('health');
-                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                activeTab === 'health'
-                  ? 'bg-[var(--bg-accent)] text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
-              }`}
-            >
-              <Activity className="w-3.5 h-3.5" />
-              <span>ไดรฟ์</span>
-              <span className="text-[9px] px-1 py-0.1 rounded font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
-                S.M.A.R.T.
-              </span>
-            </button>
-
-            {/* 3. แอป (Installed Apps) */}
-            <button
-              onClick={() => {
-                setActiveTab('apps');
-                markFeatureSeen('installed_apps');
-                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                activeTab === 'apps'
-                  ? 'bg-[var(--bg-accent)] text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
-              }`}
-            >
-              <Package className="w-3.5 h-3.5" />
-              <span>แอป</span>
-              {!seenFeatures['installed_apps'] && (
-                <span className="text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-indigo-500/20 text-indigo-500 dark:text-indigo-300">
-                  New
-                </span>
-              )}
-            </button>
-
-            {/* 4. พื้นที่ (Storage) */}
-            <button
-              onClick={() => {
-                setActiveTab('storage');
-                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                activeTab === 'storage'
-                  ? 'bg-[var(--bg-accent)] text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
-              }`}
-            >
-              <HardDrive className="w-3.5 h-3.5" />
-              <span>พื้นที่</span>
-            </button>
-
-            {/* 5. จัดระเบียบ (Organizer) */}
-            <button
-              onClick={() => {
-                setActiveTab('organizer');
-                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                activeTab === 'organizer'
-                  ? 'bg-[var(--bg-accent)] text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
-              }`}
-            >
-              <FolderInput className="w-3.5 h-3.5" />
-              <span>จัดระเบียบ</span>
-            </button>
-
-            {/* 6. ขยะ (Junk Cleaner) */}
-            <button
-              onClick={() => {
-                setActiveTab('cleaner');
-                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                activeTab === 'cleaner'
-                  ? 'bg-[var(--bg-accent)] text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
-              }`}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>ขยะ</span>
-              {totalAvailableJunkMB > 0 && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums bg-amber-500/20 text-amber-600 dark:text-amber-300">
-                  {formatSize(totalAvailableJunkMB)}
-                </span>
-              )}
-            </button>
-
-            {/* 7. เกม (Game Libraries) */}
-            <button
-              onClick={() => {
-                setActiveTab('games');
-                if (!gameLibrariesData && !isScanningGames) {
-                  handleScanGames();
-                }
-                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                activeTab === 'games'
-                  ? 'bg-[var(--bg-accent)] text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
-              }`}
-            >
-              <Gamepad2 className="w-3.5 h-3.5" />
-              <span>เกม</span>
-              {gameLibrariesData?.gameCount > 0 && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums bg-fuchsia-500/20 text-fuchsia-600 dark:text-fuchsia-300">
-                  {gameLibrariesData.gameCount}
-                </span>
-              )}
-            </button>
-
-            {/* 8. พอร์ต (Ports & Conflicts) */}
-            <button
-              onClick={() => {
-                setActiveTab('ports');
-                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                activeTab === 'ports'
-                  ? 'bg-[var(--bg-accent)] text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
-              }`}
-            >
-              <Network className="w-3.5 h-3.5" />
-              <span>พอร์ต</span>
-              {conflicts.length > 0 && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-bold animate-pulse tabular-nums">
-                  {conflicts.length}
-                </span>
-              )}
-            </button>
-          </div>
-        </nav>
-
-        {/* Right Titlebar Controls (Round Buttons) */}
-        <div className="flex items-center gap-2 no-drag">
-          {totalCleanedSessionMB > 0 && (
-            <div className="hidden xl:flex items-center gap-1.5 text-xs bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-full tabular-nums">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>ได้พื้นที่คืน: {formatSize(totalCleanedSessionMB)}</span>
-            </div>
-          )}
-
-          {/* Quick Refresh round button */}
-          <button
-            onClick={() => {
-              handleTriggerStorageScan();
-              (window as any).electronAPI?.scanActivePorts?.().then((p: any) => p && setPorts(p));
-              (window as any).electronAPI?.getWindowsServices?.().then((s: any) => s && setWindowsServices(s));
-              handleScanBackground();
-              handleScanConflicts();
-              showToast('รีเฟรชข้อมูลสำเร็จ', 'อัปเดตข้อมูลระบบ ไดรฟ์ และพอร์ตล่าสุดแล้ว', 'info');
-            }}
-            className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/80 hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 transition cursor-pointer"
-            title="รีเฟรชข้อมูลระบบสด (Refresh Telemetry & Drives)"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isScanningStorage || isScanningConflicts ? 'animate-spin text-[var(--bg-accent)]' : ''}`} />
-          </button>
-
-          {/* Quick Theme Switch Toggle */}
-          <button
-            onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
-            className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/80 hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 transition cursor-pointer"
-            title={theme === 'dark' ? 'สลับเป็นธีมสีขาว (Switch to Light Theme) [BETA]' : 'สลับเป็นธีมมืด (Switch to Dark Theme) [BETA]'}
-          >
-            {theme === 'dark' ? (
-              <Sun className="w-3.5 h-3.5 text-amber-400" />
-            ) : (
-              <Moon className="w-3.5 h-3.5 text-indigo-600" />
-            )}
-          </button>
-
-          {/* IPC Console round button */}
-          <button
-            onClick={() => setShowIpcConsole(!showIpcConsole)}
-            className={`w-8 h-8 rounded-full border transition flex items-center justify-center cursor-pointer ${
-              showIpcConsole
-                ? 'bg-amber-500/20 text-amber-500 dark:text-amber-300 border-amber-500/40'
-                : 'border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/80 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'
-            }`}
-            title={`ดูคำสั่งเชื่อมต่อ IPC Backend Console (${ipcLogs.length})`}
-          >
-            <Terminal className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
-          </button>
-
-          {/* Settings round button */}
-          <button
-            onClick={() => {
-              setActiveTab('settings');
-              mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            className={`w-8 h-8 rounded-full border transition flex items-center justify-center cursor-pointer ${
-              activeTab === 'settings'
-                ? 'bg-[var(--bg-accent)] text-white border-[var(--bg-accent)] shadow-sm'
-                : 'border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/80 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'
-            }`}
-            title="การตั้งค่าระบบ (Settings & BETA Preferences)"
-          >
-            <Settings className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Native Window Controls */}
-          <div className="flex items-center gap-1 pl-2 border-l border-slate-200 dark:border-slate-800">
-            <button
-              onClick={() => (window as any).electronAPI?.minimize?.()}
-              className="w-7 h-7 rounded hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
-              title="ย่อหน้าต่าง (Minimize)"
-            >
-              <Minus className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => (window as any).electronAPI?.maximize?.()}
-              className="w-7 h-7 rounded hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
-              title="ขยาย/คืนขนาดหน้าต่าง (Maximize)"
-            >
-              <Square className="w-3 h-3" />
-            </button>
-            <button
-              onClick={() => (window as any).electronAPI?.close?.()}
-              className="w-7 h-7 rounded hover:bg-rose-600 hover:text-white flex items-center justify-center text-slate-500 dark:text-slate-400 transition cursor-pointer"
-              title="ปิดโปรแกรม (Close)"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </header>
+      <Sidebar
+        activeTab={activeTab}
+        onSelectTab={(tab) => {
+          setActiveTab(tab);
+          markFeatureSeen(tab);
+          mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        systemDrives={systemDrives}
+        conflicts={conflicts}
+        totalAvailableJunkMB={totalAvailableJunkMB}
+        gameCount={gameLibrariesData?.gameCount || 0}
+        lastScanTime={lastScanTime}
+        onTriggerScan={() => {
+          handleTriggerStorageScan();
+          (window as any).electronAPI?.scanActivePorts?.().then((p: any) => p && setPorts(p));
+          (window as any).electronAPI?.getWindowsServices?.().then((s: any) => s && setWindowsServices(s));
+          handleScanBackground();
+          handleScanConflicts();
+          showToast('เริ่มการสแกนระบบ', 'กำลังตรวจหาไฟล์ขนาดใหญ่ ไดรฟ์ และพอร์ต...', 'info');
+        }}
+        isScanning={isScanningStorage || isScanningConflicts}
+        onToggleIpc={() => setShowIpcConsole(!showIpcConsole)}
+        showIpcConsole={showIpcConsole}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebarCollapsed}
+      />
 
       {/* =====================================================================
-          MAIN BODY: INDEPENDENT SCROLLABLE VIEWPORT (FULL-WIDTH DASHBOARD LAYOUT)
+          2. RIGHT MAIN VIEWPORT: TOP HEADER + MAIN SCROLLABLE CONTENT
       ===================================================================== */}
-      <div className="flex-1 flex overflow-hidden min-h-0">
+      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
+        {/* Top Header */}
+        <TopHeader
+          pageTitle={headerInfo.title}
+          pageSubtitle={headerInfo.subtitle}
+          timeRange={timeRange}
+          onChangeTimeRange={setTimeRange}
+          dateRangeText={dateRangeText}
+          onOpenSearch={() => setIsCommandPaletteOpen(true)}
+          hasUnreadAlerts={conflicts.length > 0 || totalAvailableJunkMB > 500}
+          onToggleNotifications={() => setIsNotificationOpen(!isNotificationOpen)}
+          theme={theme}
+          onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+          showTimeFilter={headerInfo.showTimeFilter}
+          totalCleanedMB={totalCleanedSessionMB}
+        />
+
+        {/* Scrollable Main Area */}
         <main ref={mainViewportRef} className="flex-1 p-4 md:p-6 overflow-y-auto h-full space-y-6">
           {/* Toast Notification Floating Banner */}
           {toasts.length > 0 && (
@@ -1781,592 +1693,38 @@ export default function App() {
             </div>
           )}
 
-          {/* =================================================================
-              TAB 1: DASHBOARD (ภาพรวมระบบ - DASHBOARD STYLE)
-          ================================================================= */}
+          {/* TAB 1: DASHBOARD (ภาพรวมระบบ) */}
           {activeTab === 'dashboard' && (
-            <div className="space-y-6">
-              {/* Top Heading */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-[var(--bg-accent)] shrink-0">
-                    <LayoutDashboard className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                      ภาพรวมสถานะระบบคอมพิวเตอร์ (System Overview)
-                    </h1>
-                    <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400">
-                      มอนิเตอร์ไดรฟ์จริง ตรวจสุขภาพฮาร์ดแวร์ วิเคราะห์พอร์ต และล้างข้อมูลขยะในเครื่อง
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <button
-                    onClick={() => {
-                      handleTriggerStorageScan();
-                      (window as any).electronAPI?.scanActivePorts?.().then((p: any) => p && setPorts(p));
-                      (window as any).electronAPI?.getWindowsServices?.().then((s: any) => s && setWindowsServices(s));
-                      handleScanBackground();
-                      handleScanConflicts();
-                    }}
-                    className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-sm transition cursor-pointer"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isScanningStorage || isScanningConflicts ? 'animate-spin text-[var(--bg-accent)]' : ''}`} />
-                    <span>รีเฟรชข้อมูล</span>
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('cleaner')}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--bg-accent)] hover:opacity-90 text-white text-xs font-semibold shadow-sm transition cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>เริ่มล้างไฟล์ขยะ</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Conflict Alert Banner if any conflicts exist */}
-              {conflicts.length > 0 && (
-                <div className="p-4 rounded-[20px] bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 shrink-0">
-                      <AlertTriangle className="w-5 h-5 animate-bounce" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                        <span>ตรวจพบโปรแกรมขัดการทำงานกัน {conflicts.length} รายการ</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-700 dark:text-rose-200 font-semibold">
-                          ตรวจพบข้อขัดแย้ง
-                        </span>
-                      </div>
-                      <p className="text-xs text-rose-700/80 dark:text-rose-200/80 mt-0.5">
-                        พบพอร์ตชนกัน โปรเซสเปิดค้างซ้ำซ้อน หรือโปรแกรมเบื้องหลังที่แย่งทรัพยากร อาจส่งผลให้แอปอื่นทำงานผิดพลาด
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setActiveTab('ports');
-                      setPortSubTab('conflicts');
-                    }}
-                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow transition shrink-0 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <span>ตรวจสอบข้อขัดแย้ง</span>
-                    <span>→</span>
-                  </button>
-                </div>
-              )}
-
-              {/* 4 Distinct KPI Cards Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* KPI Card 1: พื้นที่ใช้ไป (Storage Used) */}
-                <div className="p-5 rounded-[20px] bg-white dark:bg-[#1b1c2a] border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                        พื้นที่ใช้ไป (Storage Used)
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono">
-                        {systemDrives.length} ไดรฟ์
-                      </span>
-                    </div>
-                    <div className="mt-2 flex items-baseline gap-1">
-                      <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">
-                        ใช้ {totalUsedGB} GB
-                      </span>
-                      <span className="text-xs text-slate-400 tabular-nums">/ {totalCapacityGB} GB</span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                      {totalUsedPercent}% ของพื้นที่ทั้งหมด (ว่าง {totalFreeGB} GB)
-                    </div>
-                  </div>
-
-                  {/* Visual: Horizontal partitioned bar showing breakdown per drive */}
-                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
-                    <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
-                      {systemDrives.map((d, i) => {
-                        const driveWeight = (d.totalGB / (totalCapacityGB || 1)) * 100;
-                        const driveUsedInDrive = (d.usedGB / (d.totalGB || 1));
-                        const colors = ['bg-[var(--bg-accent)]', 'bg-[var(--bg-accent-2)]', 'bg-sky-500', 'bg-emerald-500'];
-                        return (
-                          <div
-                            key={d.id || d.letter}
-                            style={{ width: `${driveWeight}%` }}
-                            className="h-full flex"
-                            title={`ไดรฟ์ ${d.letter}: ${d.usedGB}/${d.totalGB} GB`}
-                          >
-                            <div
-                              className={`h-full ${colors[i % colors.length]}`}
-                              style={{ width: `${driveUsedInDrive * 100}%` }}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-                      {systemDrives.slice(0, 3).map((d) => (
-                        <span key={d.letter} className="tabular-nums font-mono font-medium">
-                          {d.letter} {d.usedGB}G / {d.totalGB}G
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* KPI Card 2: สุขภาพไดรฟ์ (Drive Health) */}
-                <div className="p-5 rounded-[20px] bg-white dark:bg-[#1b1c2a] border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                        สุขภาพไดรฟ์ & S.M.A.R.T.
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider border border-emerald-500/30">
-                        S.M.A.R.T.
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      <span className={`text-2xl font-bold tabular-nums ${driveHealthSummary.textClass}`}>
-                        {driveHealthSummary.label}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                      {driveHealthSummary.desc}
-                    </div>
-                  </div>
-
-                  {/* Visual: Smooth SVG trend line curve */}
-                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
-                    <div className="text-emerald-500 dark:text-emerald-400">
-                      <svg className="w-full h-8" viewBox="0 0 160 32" fill="none">
-                        <path
-                          d="M 0 20 Q 20 12, 40 16 T 80 10 T 120 15 T 160 11"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                        />
-                        <path
-                          d="M 0 20 Q 20 12, 40 16 T 80 10 T 120 15 T 160 11 L 160 32 L 0 32 Z"
-                          fill="currentColor"
-                          fillOpacity="0.12"
-                        />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                {/* KPI Card 3: ไฟล์ขยะที่ล้างได้ (Junk Cleanable) */}
-                <div className="p-5 rounded-[20px] bg-white dark:bg-[#1b1c2a] border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                        ไฟล์ขยะและแคชที่พร้อมล้าง
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold border border-amber-500/30">
-                        พร้อมล้าง
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      <span className="text-2xl font-bold text-amber-500 dark:text-amber-400 tabular-nums">
-                        {formatSize(totalAvailableJunkMB)}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                      พร้อมล้างทันที ({junkCategories.length} หมวดหมู่)
-                    </div>
-                  </div>
-
-                  {/* Visual: Segmented bar breakdown (System / Browser / Shader) */}
-                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-1.5">
-                    <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
-                      <div className="h-full bg-amber-500" style={{ width: '45%' }} title="แคชระบบ" />
-                      <div className="h-full bg-sky-500" style={{ width: '35%' }} title="แคชเบราว์เซอร์" />
-                      <div className="h-full bg-purple-500" style={{ width: '20%' }} title="แคช Shader" />
-                    </div>
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
-                      <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> ระบบ</span>
-                      <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-sky-500" /> เบราว์เซอร์</span>
-                      <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-purple-500" /> Shader</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* KPI Card 4: พอร์ตที่เปิดอยู่ (Active Ports & Conflicts) */}
-                <div className="p-5 rounded-[20px] bg-white dark:bg-[#1b1c2a] border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                        พอร์ตเปิด & ข้อขัดแย้ง
-                      </span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
-                        conflicts.length > 0
-                          ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30'
-                          : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                      }`}>
-                        {conflicts.length > 0 ? `${conflicts.length} ข้อขัดแย้ง` : 'ปกติ (0)'}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex items-baseline gap-1.5">
-                      <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">
-                        {ports.length} พอร์ต
-                      </span>
-                      {conflicts.length > 0 && (
-                        <span className="text-xs font-bold text-rose-500 dark:text-rose-400 tabular-nums">
-                          (+ขัดแย้ง {conflicts.length})
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                      ผูกกับ Service ของระบบ {ports.filter((p) => p.serviceName).length} ตัว
-                    </div>
-                  </div>
-
-                  {/* Visual: Chips of top 3 prominent ports */}
-                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
-                    <div className="flex items-center gap-1.5 overflow-hidden">
-                      {(ports.slice(0, 3).length > 0 ? ports.slice(0, 3) : [{ port: 80, protocol: 'TCP' }, { port: 443, protocol: 'TCP' }, { port: 8080, protocol: 'TCP' }]).map((p: any, i: number) => (
-                        <span
-                          key={i}
-                          className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-mono font-medium text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 tabular-nums truncate"
-                        >
-                          {p.protocol || 'TCP'}:{p.port}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Master-Detail Layout: Left Dark Drive List + Right Accent Details */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                {/* Left Panel: Dark List Panel (5 cols) */}
-                <div className="col-span-12 lg:col-span-5 bg-[#1c1d2b] dark:bg-[#0e0f17] text-white p-5 rounded-[20px] border border-slate-800 space-y-4 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                        <HardDrive className="w-4 h-4 text-[var(--bg-accent)]" />
-                        <span>รายการไดรฟ์จริง (Detected Drives)</span>
-                      </h3>
-                      <p className="text-[11px] text-slate-400">คลิกเลือกไดรฟ์เพื่อดูรายละเอียด</p>
-                    </div>
-                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300 font-mono tabular-nums">
-                      {systemDrives.length} ไดรฟ์
-                    </span>
-                  </div>
-
-                  <div className="space-y-2.5">
-                    {systemDrives.map((drive) => {
-                      const isSelected = (overviewSelectedDrive === drive.letter) || (!overviewSelectedDrive && drive === systemDrives[0]);
-                      return (
-                        <div
-                          key={drive.id || drive.letter}
-                          onClick={() => setOverviewSelectedDrive(drive.letter)}
-                          className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-white/10 border-[var(--bg-accent)] ring-1 ring-[var(--bg-accent)]/40 shadow-sm'
-                              : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-800/60 hover:border-slate-700'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2.5">
-                              <div className={`p-2 rounded-lg ${isSelected ? 'bg-[var(--bg-accent)] text-white' : 'bg-slate-800 text-slate-400'}`}>
-                                <HardDrive className="w-4 h-4" />
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold text-sm text-white">ไดรฟ์ {drive.letter}</span>
-                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
-                                    {drive.fileSystem}
-                                  </span>
-                                </div>
-                                <div className="text-[11px] text-slate-400 truncate max-w-[150px]">{drive.name}</div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-xs font-bold tabular-nums text-white">
-                                ว่าง {drive.freeGB} GB
-                              </div>
-                              <div className="text-[10px] text-slate-400 tabular-nums">
-                                ใช้ {drive.usedPercent}% ({drive.usedGB} GB)
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="w-full h-1.5 bg-slate-800/90 rounded-full overflow-hidden mt-2.5">
-                            <div
-                              className={`h-full rounded-full transition-all duration-500 ${
-                                drive.usedPercent >= 90
-                                  ? 'bg-rose-500'
-                                  : drive.usedPercent >= 75
-                                  ? 'bg-amber-500'
-                                  : 'bg-[var(--bg-accent)]'
-                              }`}
-                              style={{ width: `${drive.usedPercent}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Live Resource Telemetry Widget (from old sidebar) */}
-                  <div className="pt-4 border-t border-slate-800 space-y-3">
-                    <div className="flex items-center justify-between text-xs text-slate-400">
-                      <span className="flex items-center gap-1.5 text-slate-200">
-                        <Cpu className="w-3.5 h-3.5 text-sky-400" /> การทำงานของ CPU
-                      </span>
-                      <span className="font-mono tabular-nums text-white font-semibold">{cpuUsage}%</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full transition-all duration-500 ${
-                          cpuUsage >= 80 ? 'bg-rose-500' : cpuUsage >= 50 ? 'bg-amber-500' : 'bg-sky-400'
-                        }`}
-                        style={{ width: `${cpuUsage}%` }}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
-                      <span className="flex items-center gap-1.5 text-slate-200">
-                        <MemoryStick className="w-3.5 h-3.5 text-indigo-400" /> การใช้งาน RAM
-                      </span>
-                      <span className="font-mono tabular-nums text-white font-semibold">
-                        {ramUsageGB} / {totalRamGB} GB
-                      </span>
-                    </div>
-                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-[var(--bg-accent)] transition-all duration-500"
-                        style={{ width: `${Math.round((ramUsageGB / (totalRamGB || 1)) * 100)}%` }}
-                      />
-                    </div>
-
-                    <div className="pt-1 text-[11px] text-slate-400 flex items-center justify-between">
-                      <span>ตรวจพบ {systemDrives.length} ไดรฟ์</span>
-                      <span className="text-emerald-400 flex items-center gap-1.5 font-medium">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live Telemetry
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Panel: Accent Detail Panel (7 cols) */}
-                <div className="col-span-12 lg:col-span-7 bg-white dark:bg-[#1b1c2a] border border-slate-200/80 dark:border-slate-800 p-5 rounded-[20px] space-y-5 shadow-sm">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-xl bg-[var(--bg-accent)] text-white shadow-sm">
-                        <HardDrive className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-base text-slate-900 dark:text-white">
-                            รายละเอียดไดรฟ์ {currentOverviewDrive?.letter || 'C:'}
-                          </h3>
-                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--bg-accent)]/15 text-[var(--bg-accent)] dark:text-indigo-300 font-semibold border border-[var(--bg-accent)]/30">
-                            {currentOverviewDrive?.fileSystem || 'NTFS'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {currentOverviewDrive?.name || 'Local Fixed Disk'} · ความจุทั้งหมด {currentOverviewDrive?.totalGB || 0} GB
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Pill tabs switch */}
-                    <div className="inline-flex p-1 rounded-full bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 text-xs">
-                      {[
-                        { id: 'smart', label: 'ข้อมูล S.M.A.R.T.' },
-                        { id: 'files', label: 'ไฟล์ขนาดใหญ่' },
-                        { id: 'folders', label: 'สัดส่วนโฟลเดอร์' }
-                      ].map((tab) => (
-                        <button
-                          key={tab.id}
-                          onClick={() => setOverviewDetailTab(tab.id as any)}
-                          className={`px-3 py-1 rounded-full font-medium transition cursor-pointer ${
-                            overviewDetailTab === tab.id
-                              ? 'bg-[var(--bg-accent)] text-white shadow-sm'
-                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                          }`}
-                        >
-                          {tab.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Detail Tab 1: S.M.A.R.T. Metrics */}
-                  {overviewDetailTab === 'smart' && (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80">
-                          <span className="text-[10px] text-slate-400 block font-semibold uppercase">สถานะสุขภาพ</span>
-                          <span className="font-bold text-sm text-emerald-500 dark:text-emerald-400 flex items-center gap-1 mt-1">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> ปกติ (Healthy)
-                          </span>
-                        </div>
-                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80">
-                          <span className="text-[10px] text-slate-400 block font-semibold uppercase">ชนิดสื่อ & บัส</span>
-                          <span className="font-bold text-sm text-slate-800 dark:text-slate-200 mt-1 block">
-                            SSD · NVMe/SATA
-                          </span>
-                        </div>
-                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80">
-                          <span className="text-[10px] text-slate-400 block font-semibold uppercase">อุณหภูมิ</span>
-                          <span className="font-bold text-sm text-slate-800 dark:text-slate-200 mt-1 block tabular-nums">
-                            ~38 °C (ปกติ)
-                          </span>
-                        </div>
-                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80">
-                          <span className="text-[10px] text-slate-400 block font-semibold uppercase">พื้นที่คงเหลือ</span>
-                          <span className="font-bold text-sm text-[var(--bg-accent)] mt-1 block tabular-nums">
-                            {currentOverviewDrive?.freeGB || 0} GB
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800/80 space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-slate-700 dark:text-slate-300">สัดส่วนพื้นที่ที่ใช้งานไป:</span>
-                          <span className="font-mono tabular-nums text-slate-600 dark:text-slate-400">
-                            {currentOverviewDrive?.usedGB || 0} GB / {currentOverviewDrive?.totalGB || 0} GB ({currentOverviewDrive?.usedPercent || 0}%)
-                          </span>
-                        </div>
-                        <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-[var(--bg-accent)] rounded-full transition-all duration-500"
-                            style={{ width: `${currentOverviewDrive?.usedPercent || 0}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-3 pt-2">
-                        <button
-                          onClick={() => {
-                            if (currentOverviewDrive) setSelectedDrive(currentOverviewDrive.letter);
-                            setActiveTab('storage');
-                            handleTriggerStorageScan(currentOverviewDrive?.letter);
-                          }}
-                          className="px-4 py-2 rounded-xl bg-[var(--bg-accent)] hover:opacity-90 text-white text-xs font-semibold shadow-sm transition flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <span>วิเคราะห์พื้นที่ไดรฟ์นี้</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setActiveTab('health');
-                            mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-                          }}
-                          className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <Activity className="w-3.5 h-3.5 text-[var(--bg-accent)]" />
-                          <span>ตรวจสุขภาพ S.M.A.R.T. เต็มรูปแบบ</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Detail Tab 2: Large Files on this Drive */}
-                  {overviewDetailTab === 'files' && (
-                    <div className="space-y-3">
-                      {overviewDriveFiles.length === 0 ? (
-                        <div className="py-8 text-center text-xs text-slate-400">
-                          ยังไม่มีข้อมูลไฟล์ใหญ่สำหรับไดรฟ์นี้ กดปุ่มรีเฟรชเพื่อสแกน
-                        </div>
-                      ) : (
-                        overviewDriveFiles.map((item) => (
-                          <div
-                            key={item.id}
-                            className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3 hover:border-slate-300 dark:hover:border-slate-700 transition"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-xs md:text-sm text-slate-900 dark:text-slate-100 truncate">{item.name}</span>
-                                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
-                                  {item.category}
-                                </span>
-                              </div>
-                              <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono truncate mt-0.5">{item.path}</div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span className="text-xs md:text-sm font-bold text-amber-500 font-mono tabular-nums">
-                                {formatSize(item.sizeMB)}
-                              </span>
-                              <button
-                                onClick={() => handleOpenFolder(item.path)}
-                                className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition cursor-pointer"
-                                title="เปิดโฟลเดอร์ใน Windows Explorer"
-                              >
-                                <FolderOpen className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirmModal({ file: item })}
-                                className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-rose-500/20 hover:text-rose-500 text-slate-700 dark:text-slate-300 transition cursor-pointer"
-                                title="ลบไฟล์นี้"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-
-                      <div className="pt-2 text-right">
-                        <button
-                          onClick={() => setActiveTab('storage')}
-                          className="text-xs font-semibold text-[var(--bg-accent)] hover:underline inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          <span>ดูไฟล์ขนาดใหญ่ทั้งหมดในหน้าวิเคราะห์พื้นที่</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Detail Tab 3: Folder Breakdown */}
-                  {overviewDetailTab === 'folders' && (
-                    <div className="space-y-3">
-                      {directoryBreakdown.length === 0 ? (
-                        <div className="py-8 text-center text-xs text-slate-400">
-                          ยังไม่มีข้อมูลการคำนวณโฟลเดอร์ กดปุ่มรีเฟรชเพื่อคำนวณ
-                        </div>
-                      ) : (
-                        directoryBreakdown.slice(0, 4).map((d) => (
-                          <div
-                            key={d.id}
-                            className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-xs md:text-sm text-slate-900 dark:text-slate-100 truncate">{d.label}</span>
-                                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
-                                  {d.badge}
-                                </span>
-                              </div>
-                              <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mt-2">
-                                <div className="h-full bg-[var(--bg-accent)] rounded-full" style={{ width: `${d.percent}%` }} />
-                              </div>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <span className="text-xs md:text-sm font-bold text-[var(--bg-accent)] font-mono tabular-nums">{d.sizeGB} GB</span>
-                              <div className="text-[11px] text-slate-400 tabular-nums">{d.percent}%</div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-
-                      <div className="pt-2 text-right">
-                        <button
-                          onClick={() => setActiveTab('storage')}
-                          className="text-xs font-semibold text-[var(--bg-accent)] hover:underline inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          <span>ดูแผนผัง Treemap เต็มรูปแบบในหน้าวิเคราะห์พื้นที่</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+            <OverviewWidgets
+              systemDrives={systemDrives}
+              totalCapacityGB={totalCapacityGB}
+              totalUsedGB={totalUsedGB}
+              totalFreeGB={totalFreeGB}
+              totalUsedPercent={totalUsedPercent}
+              driveHealthSummary={driveHealthSummary}
+              totalAvailableJunkMB={totalAvailableJunkMB}
+              junkCategories={junkCategories}
+              ports={ports}
+              conflicts={conflicts}
+              cpuUsage={cpuUsage}
+              ramUsageGB={ramUsageGB}
+              totalRamGB={totalRamGB}
+              selectedDrive={overviewSelectedDrive}
+              onSelectDrive={(letter) => setOverviewSelectedDrive(letter)}
+              onNavigateTab={(tab) => {
+                setActiveTab(tab);
+                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              onTriggerRefresh={() => {
+                handleTriggerStorageScan();
+                (window as any).electronAPI?.scanActivePorts?.().then((p: any) => p && setPorts(p));
+                (window as any).electronAPI?.getWindowsServices?.().then((s: any) => s && setWindowsServices(s));
+                handleScanBackground();
+                handleScanConflicts();
+                showToast('รีเฟรชข้อมูลสำเร็จ', 'อัปเดตข้อมูลไดรฟ์และฮาร์ดแวร์ล่าสุดแล้ว', 'info');
+              }}
+              isScanning={isScanningStorage || isScanningConflicts}
+            />
           )}
 
           {/* =================================================================
@@ -2423,7 +1781,7 @@ export default function App() {
                     title="เลือกไฟล์จากเครื่องคอมพิวเตอร์เพื่อตรวจสอบขนาด ความสมบูรณ์ และการล็อกไฟล์"
                   >
                     <FileSearch className={`w-3.5 h-3.5 text-violet-400 ${isInspectingFiles ? 'animate-spin' : ''}`} />
-                    <span>{isInspectingFiles ? 'กำลังตรวจสอบ...' : '📁 เลือกไฟล์เพื่อตรวจสอบ'}</span>
+                    <span>{isInspectingFiles ? 'กำลังตรวจสอบ...' : 'เลือกไฟล์เพื่อตรวจสอบ'}</span>
                   </button>
 
                   {/* Dedicated Game Files & Libraries Access Button (ให้เข้าถึงพวกไฟล์เกมด้วย) */}
@@ -2434,7 +1792,7 @@ export default function App() {
                     title="เข้าถึงและวิเคราะห์คลังเกมทั้งหมดในเครื่อง (Steam, Riot Games, Epic Games, Roblox, Gryphline)"
                   >
                     <Gamepad2 className={`w-3.5 h-3.5 text-fuchsia-400 ${isScanningGames ? 'animate-spin' : ''}`} />
-                    <span>{isScanningGames ? 'กำลังสแกนเกม...' : '🎮 คลังไฟล์เกม (Game Files)'}</span>
+                    <span>{isScanningGames ? 'กำลังสแกนเกม...' : 'คลังไฟล์เกม (Game Files)'}</span>
                   </button>
 
                   <button
@@ -2473,7 +1831,7 @@ export default function App() {
                         className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold shadow transition flex items-center gap-1.5"
                       >
                         <FileSearch className="w-3.5 h-3.5" />
-                        <span>➕ เลือกไฟล์เพิ่ม</span>
+                        <span>เลือกไฟล์เพิ่ม</span>
                       </button>
                       <button
                         onClick={() => setCustomInspectedFiles([])}
@@ -2504,17 +1862,17 @@ export default function App() {
                             </span>
                             {item.status === 'normal' && (
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">
-                                ✓ พร้อมใช้งาน (ปกติ)
+                                พร้อมใช้งาน (ปกติ)
                               </span>
                             )}
                             {item.status === 'locked' && (
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold">
-                                ⚠ ถูกล็อก/ใช้งานอยู่ ({item.lockedBy?.[0]?.processName || 'In-Use'})
+                                ถูกล็อก/ใช้งานอยู่ ({item.lockedBy?.[0]?.processName || 'In-Use'})
                               </span>
                             )}
                             {item.status === 'deleted' && (
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold">
-                                ✕ ไม่พบไฟล์ (ถูกลบหรือย้าย)
+                                ไม่พบไฟล์ (ถูกลบหรือย้าย)
                               </span>
                             )}
                           </div>
@@ -2777,13 +2135,13 @@ export default function App() {
                       }`}
                       title="กรองตามประเภทไฟล์"
                     >
-                      <option value="all" className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-900 text-slate-200'}>📁 ทุกหมวดหมู่ ({largeFiles.length})</option>
-                      <option value="game" className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-900 text-slate-200'}>🎮 ไฟล์เกม ({largeFiles.filter(f => f.category?.includes('Game')).length})</option>
-                      <option value="media" className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-900 text-slate-200'}>🎥 วิดีโอ / สื่อ ({largeFiles.filter(f => f.category?.includes('Media')).length})</option>
-                      <option value="archive" className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-900 text-slate-200'}>📦 บีบอัด / ISO ({largeFiles.filter(f => f.category?.includes('Archive')).length})</option>
-                      <option value="binary" className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-900 text-slate-200'}>💾 ไบนารี / ติดตั้ง ({largeFiles.filter(f => f.category?.includes('Binary') || f.category?.includes('Installer')).length})</option>
-                      <option value="dev" className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-900 text-slate-200'}>💻 โค้ด / ข้อมูล ({largeFiles.filter(f => f.category?.includes('Dev') || f.category?.includes('Database')).length})</option>
-                      <option value="other" className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-900 text-slate-200'}>📄 เอกสารและอื่นๆ</option>
+                      <option value="all" className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-900 text-slate-200'}>ทุกหมวดหมู่ ({largeFiles.length})</option>
+                      <option value="game" className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-900 text-slate-200'}>ไฟล์เกม ({largeFiles.filter(f => f.category?.includes('Game')).length})</option>
+                      <option value="media" className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-900 text-slate-200'}>วิดีโอ / สื่อ ({largeFiles.filter(f => f.category?.includes('Media')).length})</option>
+                      <option value="archive" className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-900 text-slate-200'}>บีบอัด / ISO ({largeFiles.filter(f => f.category?.includes('Archive')).length})</option>
+                      <option value="binary" className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-900 text-slate-200'}>ไบนารี / ติดตั้ง ({largeFiles.filter(f => f.category?.includes('Binary') || f.category?.includes('Installer')).length})</option>
+                      <option value="dev" className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-900 text-slate-200'}>โค้ด / ข้อมูล ({largeFiles.filter(f => f.category?.includes('Dev') || f.category?.includes('Database')).length})</option>
+                      <option value="other" className={theme === 'light' ? 'bg-white text-slate-900' : 'bg-slate-900 text-slate-200'}>เอกสารและอื่นๆ</option>
                     </select>
 
                     <div className="relative">
@@ -2829,7 +2187,7 @@ export default function App() {
                           title="ส่งไฟล์ที่เลือกไปตรวจสอบความสมบูรณ์และการล็อกเชิงลึก"
                         >
                           <FileSearch className="w-3.5 h-3.5" />
-                          <span>⚡ ตรวจสอบไฟล์ที่เลือก</span>
+                          <span>ตรวจสอบไฟล์ที่เลือก</span>
                         </button>
                         <button
                           onClick={handleBatchMoveSelected}
@@ -3234,7 +2592,7 @@ export default function App() {
                               </div>
 
                               <div className="text-[11px] text-slate-400 font-mono bg-slate-950/70 p-2 rounded-lg border border-slate-800/80 truncate" title={game.installPath}>
-                                📁 {game.installPath}
+                                {game.installPath}
                               </div>
 
                               {game.largestFile && game.largestFile.name && (
@@ -3570,7 +2928,7 @@ export default function App() {
                           {(cat.hasShaderWarning || cat.id === 'game_caches') && (
                             <div className="mt-2 p-2 rounded-xl bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-200 flex items-center gap-2">
                               <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                              <span>{cat.shaderNotice || '⚠️ คำเตือน: Shader Cache ช่วยให้เกมเปิดเล่นได้ลื่นไหล หากลบไฟล์นี้ เมื่อเข้าเกมครั้งแรกจะโหลดช้าเหมือนเข้าเกมครั้งแรกเพื่อ Compile Shader ใหม่'}</span>
+                              <span>{cat.shaderNotice || 'คำเตือน: Shader Cache ช่วยให้เกมเปิดเล่นได้ลื่นไหล หากลบไฟล์นี้ เมื่อเข้าเกมครั้งแรกจะโหลดช้าเหมือนเข้าเกมครั้งแรกเพื่อ Compile Shader ใหม่'}</span>
                             </div>
                           )}
                         </div>
@@ -3856,7 +3214,7 @@ export default function App() {
                           }`}
                         >
                           <Layers className="w-3.5 h-3.5" />
-                          <span>📂 จัดกลุ่มตามไฟล์โปรแกรม (ย่อไว้ก่อน)</span>
+                          <span>จัดกลุ่มตามไฟล์โปรแกรม (ย่อไว้ก่อน)</span>
                         </button>
                         <button
                           onClick={() => setPortViewMode('flat')}
@@ -3867,7 +3225,7 @@ export default function App() {
                           }`}
                         >
                           <Filter className="w-3.5 h-3.5" />
-                          <span>📋 รายการตารางพอร์ตทั้งหมด</span>
+                          <span>รายการตารางพอร์ตทั้งหมด</span>
                         </button>
                       </div>
                     </div>
@@ -4404,12 +3762,12 @@ export default function App() {
                           onChange={(e) => setBackgroundCategoryFilter(e.target.value)}
                           className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer"
                         >
-                          <option value="all">📂 หมวดหมู่: แสดงทั้งหมด ({backgroundProcs.length} โปรเซส)</option>
-                          <option value="user_app">👤 แอปผู้ใช้เบื้องหลัง ({backgroundProcs.filter((p) => p.category === 'user_app').length} โปรเซส)</option>
-                          <option value="service">⚙️ เซอร์วิสของ Windows ({backgroundProcs.filter((p) => p.category === 'service').length} โปรเซส)</option>
-                          <option value="windows_app">🪟 แอปเสริมของ Windows ({backgroundProcs.filter((p) => p.category === 'windows_app').length} โปรเซส)</option>
-                          <option value="system">🛡️ โปรเซสแกนหลักระบบ ({backgroundProcs.filter((p) => p.category === 'system').length} โปรเซส)</option>
-                          <option value="other">📦 อื่นๆ ({backgroundProcs.filter((p) => p.category === 'other').length} โปรเซส)</option>
+                          <option value="all">หมวดหมู่: แสดงทั้งหมด ({backgroundProcs.length} โปรเซส)</option>
+                          <option value="user_app">แอปผู้ใช้เบื้องหลัง ({backgroundProcs.filter((p) => p.category === 'user_app').length} โปรเซส)</option>
+                          <option value="service">เซอร์วิสของ Windows ({backgroundProcs.filter((p) => p.category === 'service').length} โปรเซส)</option>
+                          <option value="windows_app">แอปเสริมของ Windows ({backgroundProcs.filter((p) => p.category === 'windows_app').length} โปรเซส)</option>
+                          <option value="system">โปรเซสแกนหลักระบบ ({backgroundProcs.filter((p) => p.category === 'system').length} โปรเซส)</option>
+                          <option value="other">อื่นๆ ({backgroundProcs.filter((p) => p.category === 'other').length} โปรเซส)</option>
                         </select>
                       </div>
 
@@ -4420,9 +3778,9 @@ export default function App() {
                           onChange={(e) => setBackgroundSortBy(e.target.value as any)}
                           className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer"
                         >
-                          <option value="ram">⚡ เรียงตาม: แรมที่ใช้ (มากไปน้อย)</option>
-                          <option value="name">🔤 เรียงตาม: ชื่อโปรเซส (A-Z)</option>
-                          <option value="pid">🔢 เรียงตาม: หมายเลข PID</option>
+                          <option value="ram">เรียงตาม: แรมที่ใช้ (มากไปน้อย)</option>
+                          <option value="name">เรียงตาม: ชื่อโปรเซส (A-Z)</option>
+                          <option value="pid">เรียงตาม: หมายเลข PID</option>
                         </select>
                       </div>
                     </div>
@@ -4738,7 +4096,7 @@ export default function App() {
                                 >
                                   <Zap className="w-3.5 h-3.5" />
                                   <span>
-                                    {resolvingConflictId === conflict.id ? 'กำลังปลดล็อก...' : '⚡ ปิดโปรเซสที่ขัดแย้งทันที'}
+                                    {resolvingConflictId === conflict.id ? 'กำลังปลดล็อก...' : 'ปิดโปรเซสที่ขัดแย้งทันที'}
                                   </span>
                                 </button>
                               )}
@@ -5130,7 +4488,7 @@ export default function App() {
                           </div>
 
                           <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono bg-slate-50 dark:bg-slate-900/70 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 truncate" title={game.installPath}>
-                            📁 {game.installPath}
+                            {game.installPath}
                           </div>
 
                           {game.largestFile && game.largestFile.name && (
@@ -5550,7 +4908,7 @@ export default function App() {
                     </h3>
                   </div>
                   <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-medium">
-                    ✓ ปลดล็อกถอนการติดตั้งทันที ไม่ต้อง Restart
+                    ปลดล็อกถอนการติดตั้งทันที ไม่ต้อง Restart
                   </span>
                 </div>
 
@@ -5620,7 +4978,6 @@ export default function App() {
             </div>
           )}
         </main>
-      </div>
 
       {/* =====================================================================
           BOTTOM DOCK: LIVE IPC TERMINAL CONSOLE
@@ -5671,6 +5028,37 @@ export default function App() {
           </div>
         </div>
       )}
+
+      </div>
+
+      {/* Global Command Palette Modal (Ctrl+K) */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onSelectTab={(tab) => {
+          setActiveTab(tab);
+          mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onTriggerScan={() => {
+          handleTriggerStorageScan();
+          showToast('เริ่มสแกนพื้นที่', 'กำลังตรวจหาไฟล์ขนาดใหญ่...', 'info');
+        }}
+        onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+        onToggleIpc={() => setShowIpcConsole((prev) => !prev)}
+      />
+
+      {/* Notification Popover */}
+      <NotificationPopover
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        conflicts={conflicts}
+        totalAvailableJunkMB={totalAvailableJunkMB}
+        systemDrives={systemDrives}
+        onNavigate={(tab) => {
+          setActiveTab(tab);
+          mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+      />
 
       {/* Confirmation Modal for 1-Click Uninstall */}
       {showUninstallModal && (
