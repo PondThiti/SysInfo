@@ -48,6 +48,77 @@ html.font-size-xl .text-\[11px\] { font-size: 14px !important; }
   background: #334155;
 }
 
+/* ==========================================================================
+   DESIGN TOKENS (CSS VARIABLES) — DASHBOARD STYLE
+   ========================================================================== */
+:root {
+  /* Surface Tokens */
+  --bg-canvas: #eceaf6;
+  --bg-card: #ffffff;
+  --bg-card-subtle: #f7f6fc;
+  --bg-dark: #1c1d2b;
+  --bg-dark-card: #25273a;
+  --bg-dark-card-hover: #2e3047;
+  --bg-accent: #5b4ed6;
+  --bg-accent-2: #7b6fe6;
+  --bg-accent-subtle: rgba(91, 78, 214, 0.08);
+
+  /* Text Tokens */
+  --text: #1b1c2a;
+  --text-muted: #7a7b8c;
+  --text-on-dark: #f2f2f8;
+
+  /* Status Tokens */
+  --ok: #2fa66a;
+  --warn: #e0a31a;
+  --crit: #d9483b;
+  --info: #3b82f6;
+
+  /* Shape & Radius Tokens */
+  --r-card: 20px;
+  --r-ctrl: 12px;
+  --r-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(20, 20, 40, 0.04), 0 8px 24px rgba(20, 20, 40, 0.06);
+
+  /* Typography */
+  --app-font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+:root[data-theme="dark"],
+html.theme-dark,
+.theme-dark {
+  --bg-canvas: #12131c;
+  --bg-card: #1b1c2a;
+  --bg-card-subtle: #222436;
+  --bg-dark: #0e0f17;
+  --bg-dark-card: #161724;
+  --bg-dark-card-hover: #1e2030;
+  --text: #f2f2f8;
+  --text-muted: #9a9bb0;
+  --text-on-dark: #f2f2f8;
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+body {
+  font-family: var(--app-font-family);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom Select Options High Contrast */
+select option {
+  background-color: #1b1c2a;
+  color: #f2f2f8;
+}
+
+html.theme-light select option,
+.theme-light select option {
+  background-color: #ffffff !important;
+  color: #1b1c2a !important;
+}
+
 /* Electron Window Draggable Region */
 .titlebar-drag-region {
   -webkit-app-region: drag;

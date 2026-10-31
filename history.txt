@@ -289,3 +289,29 @@ Update (2026-10-26): Version 0.1.4 - Drive Health & S.M.A.R.T. Monitor, Junk Cle
    - แก้ไขประวัติ Git commit เก่าที่เคยบันทึกผิดเป็น 0.10.3 ให้เรียบร้อย
    - บิลด์และส่งออกตัวติดตั้ง v0.1.4 ครบทุกรูปแบบ (NSIS .exe, Portable .zip, MSI .msi) ไปยัง C:\Users\zeroy\Desktop\MyProject\Apps\PC-App\ พร้อมล้างไฟล์เก่าออกทั้งหมด
 
+================================================================================
+Update (2026-10-31): Version 0.1.5 - Dashboard Style Redesign, Top Capsule Nav & Beta Badges
+================================================================================
+1. ปรับโฉมดีไซน์ระบบ Dashboard Style & Top Capsule Navigation:
+   - ยุบแถบ Sidebar ด้านข้าง เปลี่ยนเป็น Top Nav Capsule ทรงแคปซูลลอยด้านบน ขยายพื้นที่เนื้อหาแบบ Full-Width
+   - เพิ่มแถว KPI 4 ใบ พร้อมภาพประกอบเฉพาะตัว (พื้นที่จัดเก็บแยกแท่งตามไดรฟ์จริง, เส้นแนวโน้มความเสถียรสุขภาพไดรฟ์ S.M.A.R.T., แท่งแยกหมวดหมู่ไฟล์ขยะที่ล้างได้, ชิปพอร์ตเด่นที่เปิดใช้งาน)
+   - ปรับเลย์เอาต์ Master-Detail (แผงมืดรายการไดรฟ์จริง + Live Telemetry CPU/RAM ทางซ้าย / แผงสีธีมรายละเอียดเชิงลึก S.M.A.R.T. และไฟล์ขนาดใหญ่ทางขวา)
+   - นำหลักการ Anti-AI Design มาใช้: ใช้ชุดไอคอน Lucide สม่ำเสมอทั้งแอป, ปราศจากแสง Glow ฟุ้ง, ตัวเลขใช้ tabular-nums, ไมโครคอปปี้กระชับเป็นภาษาคนใช้งานจริง
+   - วางระบบ Design Tokens (CSS Variables: --bg-canvas, --bg-card, --bg-dark, --bg-accent, --bg-accent-2, --text)
+
+2. ป้ายกำกับทดลอง <BetaBadge /> & ระบบธีมสี/ฟอนต์:
+   - สร้างคอมโพเนนต์ <BetaBadge /> แบบใช้ซ้ำ สไตล์โปร่งแสงสีเตือน (Amber) พร้อม Tooltip
+   - วางป้าย BETA ที่หัวข้อ "เปลี่ยนสีธีม (Accent Theme)" และ "เปลี่ยน Font (Typography)" ในหน้าตั้งค่า
+   - ระบบเปลี่ยนสีธีมรองรับ 5 เฉดสี (ม่วงค่าเริ่มต้น, ฟ้า, เขียวมิ้นต์, ส้ม, เทาเข้ม) ทำงานผ่านการสลับตัวแปร CSS
+   - ระบบเปลี่ยน Font รองรับฟอนต์อ่านภาษาไทยสบายตา (System Default, IBM Plex Sans Thai, Noto Sans Thai, Sarabun) พร้อม Live Preview
+
+3. หน้าคลังเกมเฉพาะ (Game Libraries Dedicated View):
+   - เพิ่มเมนูเกม (Games) ใน Top Nav Capsule เพื่อเข้าถึงข้อมูลคลังเกมจาก Steam, Riot Games, GRYPHLINK, Roblox และ Epic Games ได้ทันที
+
+4. อัปเดตและปรับแต่งเวอร์ชัน:
+   - อัปเดตเวอร์ชันเป็น 0.1.5 ครบทุกส่วนของโปรแกรม (package.json, src-tauri/Cargo.toml, wix/Product.wxs, App.tsx, README.md, scripts)
+   - แก้ไขลิงก์ Repository ใน README.md ให้ชี้ไปยัง repo จริง SysInfo.git
+   - จัดทำเอกสารแผนการพัฒนาและสเปกส่งออก SysInfo_v0.1.5_Plan.md ใน root directory
+   - บิลด์และส่งออกตัวติดตั้ง v0.1.5 ครบทุกรูปแบบ (NSIS .exe, Portable .zip, MSI .msi) ไปยัง C:\Users\zeroy\Desktop\MyProject\Apps\PC-App\ พร้อมล้างไฟล์บิลด์เก่าออกทั้งหมด
+
+

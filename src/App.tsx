@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import FileOrganizerView from './components/FileOrganizerView';
 import InstalledAppsView from './components/InstalledAppsView';
 import DriveHealthView from './components/DriveHealthView';
+import BetaBadge from './components/BetaBadge';
 import {
   LayoutDashboard,
   HardDrive,
@@ -49,8 +50,30 @@ import {
   FileSearch,
   CheckSquare,
   Gamepad2,
-  Package
+  Package,
+  ArrowRight,
+  Palette,
+  Laptop
 } from 'lucide-react';
+
+export type TabType = 'dashboard' | 'health' | 'apps' | 'storage' | 'organizer' | 'cleaner' | 'games' | 'ports' | 'settings';
+export type AccentTheme = 'purple' | 'blue' | 'emerald' | 'orange' | 'slate';
+export type FontFamilyType = 'system' | 'ibm' | 'noto' | 'sarabun';
+
+export const ACCENT_OPTIONS: { id: AccentTheme; name: string; hex: string; secondary: string; dotClass: string }[] = [
+  { id: 'purple', name: 'ม่วง (ค่าเริ่ม)', hex: '#5b4ed6', secondary: '#7b6fe6', dotClass: 'bg-[#5b4ed6]' },
+  { id: 'blue', name: 'ฟ้า (Ocean Blue)', hex: '#2563eb', secondary: '#3b82f6', dotClass: 'bg-[#2563eb]' },
+  { id: 'emerald', name: 'เขียวมิ้นต์ (Mint)', hex: '#059669', secondary: '#10b981', dotClass: 'bg-[#059669]' },
+  { id: 'orange', name: 'ส้ม (Sunset)', hex: '#ea580c', secondary: '#f97316', dotClass: 'bg-[#ea580c]' },
+  { id: 'slate', name: 'เทาเข้ม (Slate Dark)', hex: '#475569', secondary: '#64748b', dotClass: 'bg-[#475569]' },
+];
+
+export const FONT_OPTIONS: { id: FontFamilyType; name: string; subtitle: string; family: string }[] = [
+  { id: 'system', name: 'ฟอนต์ระบบ (แนะนำ)', subtitle: 'System Default / Segoe UI', family: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
+  { id: 'ibm', name: 'IBM Plex Sans Thai', subtitle: 'โมเดิร์น คมชัด สไตล์เทคโนโลยี', family: '"IBM Plex Sans Thai", system-ui, sans-serif' },
+  { id: 'noto', name: 'Noto Sans Thai', subtitle: 'มาตรฐาน Google สบายตา อ่านง่าย', family: '"Noto Sans Thai", system-ui, sans-serif' },
+  { id: 'sarabun', name: 'Sarabun', subtitle: 'สารบรรณ คมชัด ทางการ เรียบหรู', family: '"Sarabun", system-ui, sans-serif' },
+];
 
 // Format size helper (MB to MB/GB)
 function formatSize(sizeMB: number): string {
@@ -76,8 +99,10 @@ interface IpcLog {
 }
 
 export default function App() {
-  // Navigation tabs: 'dashboard' | 'storage' | 'organizer' | 'cleaner' | 'ports' | 'apps' | 'settings'
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'storage' | 'health' | 'organizer' | 'cleaner' | 'ports' | 'apps' | 'settings'>('dashboard');
+  // Navigation tabs: 'dashboard' | 'health' | 'apps' | 'storage' | 'organizer' | 'cleaner' | 'games' | 'ports' | 'settings'
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [overviewSelectedDrive, setOverviewSelectedDrive] = useState<string>('C:');
+  const [overviewDetailTab, setOverviewDetailTab] = useState<'smart' | 'files' | 'folders'>('smart');
 
   // Seen features state for "NEW" badge (only appears first time until visited)
   const [seenFeatures, setSeenFeatures] = useState<{ [key: string]: boolean }>(() => {
@@ -219,6 +244,12 @@ export default function App() {
   const [fontSize, setFontSize] = useState<'small' | 'normal' | 'large' | 'xl'>(() => {
     return (localStorage.getItem('syspulse_font_size') as 'small' | 'normal' | 'large' | 'xl') || 'normal';
   });
+  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => {
+    return (localStorage.getItem('sysinfo_accent_theme') as AccentTheme) || 'purple';
+  });
+  const [fontFamily, setFontFamily] = useState<FontFamilyType>(() => {
+    return (localStorage.getItem('sysinfo_font_family') as FontFamilyType) || 'system';
+  });
   const [telemetryInterval, setTelemetryInterval] = useState(2500);
   const [minHeavyFileSizeMB, setMinHeavyFileSizeMB] = useState(25);
   const [scanDepth, setScanDepth] = useState(4);
@@ -242,11 +273,28 @@ export default function App() {
     if (theme === 'light') {
       document.documentElement.classList.add('theme-light');
       document.documentElement.classList.remove('theme-dark');
+      document.documentElement.setAttribute('data-theme', 'light');
     } else {
       document.documentElement.classList.add('theme-dark');
       document.documentElement.classList.remove('theme-light');
+      document.documentElement.setAttribute('data-theme', 'dark');
     }
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem('sysinfo_accent_theme', accentTheme);
+    const item = ACCENT_OPTIONS.find((a) => a.id === accentTheme) || ACCENT_OPTIONS[0];
+    document.documentElement.style.setProperty('--bg-accent', item.hex);
+    document.documentElement.style.setProperty('--bg-accent-2', item.secondary);
+    document.documentElement.setAttribute('data-accent', accentTheme);
+  }, [accentTheme]);
+
+  useEffect(() => {
+    localStorage.setItem('sysinfo_font_family', fontFamily);
+    const item = FONT_OPTIONS.find((f) => f.id === fontFamily) || FONT_OPTIONS[0];
+    document.documentElement.style.setProperty('--app-font-family', item.family);
+    document.body.style.fontFamily = item.family;
+  }, [fontFamily]);
 
   useEffect(() => {
     localStorage.setItem('syspulse_font_size', fontSize);
@@ -258,6 +306,15 @@ export default function App() {
     );
     document.documentElement.classList.add(`font-size-${fontSize}`);
   }, [fontSize]);
+
+  // Keep overviewSelectedDrive in sync when systemDrives loads
+  useEffect(() => {
+    if (systemDrives && systemDrives.length > 0) {
+      if (!overviewSelectedDrive || !systemDrives.some((d) => d.letter === overviewSelectedDrive)) {
+        setOverviewSelectedDrive(systemDrives[0].letter);
+      }
+    }
+  }, [systemDrives, overviewSelectedDrive]);
 
   // IPC Console & Toast Notifications
   const [showIpcConsole, setShowIpcConsole] = useState(false);
@@ -1381,91 +1438,310 @@ export default function App() {
     return conflicts.filter((c) => c.severity === conflictFilter);
   }, [conflicts, conflictFilter]);
 
+  // Computed KPI metrics for Overview (v0.1.5 Dashboard)
+  const totalCapacityGB = useMemo(() => {
+    return systemDrives.reduce((acc, d) => acc + (d.totalGB || 0), 0);
+  }, [systemDrives]);
+
+  const totalUsedGB = useMemo(() => {
+    return systemDrives.reduce((acc, d) => acc + (d.usedGB || 0), 0);
+  }, [systemDrives]);
+
+  const totalFreeGB = useMemo(() => {
+    return systemDrives.reduce((acc, d) => acc + (d.freeGB || 0), 0);
+  }, [systemDrives]);
+
+  const totalUsedPercent = useMemo(() => {
+    if (!totalCapacityGB) return 0;
+    return Math.min(100, Math.round((totalUsedGB / totalCapacityGB) * 100));
+  }, [totalUsedGB, totalCapacityGB]);
+
+  const currentOverviewDrive = useMemo(() => {
+    return systemDrives.find((d) => d.letter === overviewSelectedDrive) || systemDrives[0] || null;
+  }, [systemDrives, overviewSelectedDrive]);
+
+  const overviewDriveFiles = useMemo(() => {
+    if (!currentOverviewDrive) return largeFiles.slice(0, 4);
+    const filtered = largeFiles.filter((f) => f.drive === currentOverviewDrive.letter);
+    return filtered.length > 0 ? filtered.slice(0, 4) : largeFiles.slice(0, 4);
+  }, [largeFiles, currentOverviewDrive]);
+
+  const driveHealthSummary = useMemo(() => {
+    const hasCrit = systemDrives.some((d) => d.status === 'critical' || d.usedPercent >= 95);
+    const hasWarn = systemDrives.some((d) => d.status === 'warning' || d.usedPercent >= 80);
+    if (hasCrit) return { label: 'ต้องระวัง (Critical)', textClass: 'text-rose-500', bgClass: 'bg-rose-500/15', desc: 'มีไดรฟ์พื้นที่วิกฤต หรือตรวจพบข้อผิดพลาด' };
+    if (hasWarn) return { label: 'ใช้งานสูง (Warning)', textClass: 'text-amber-500', bgClass: 'bg-amber-500/15', desc: 'มีไดรฟ์ที่พื้นที่เหลือน้อยกว่า 20%' };
+    return { label: 'สมบูรณ์ (Healthy)', textClass: 'text-emerald-500 dark:text-emerald-400', bgClass: 'bg-emerald-500/15', desc: 'ทุกไดรฟ์อยู่ในเกณฑ์ปกติ อุณหภูมิ ~38°C' };
+  }, [systemDrives]);
+
   return (
-    <div className={`h-screen w-screen ${theme === 'light' ? 'theme-light bg-slate-50 text-slate-900' : 'theme-dark bg-slate-950 text-slate-100'} flex flex-col font-sans selection:bg-indigo-500 selection:text-white overflow-hidden select-none`}>
+    <div
+      className={`h-screen w-screen ${theme === 'light' ? 'theme-light' : 'theme-dark'} flex flex-col font-sans selection:bg-[var(--bg-accent)] selection:text-white overflow-hidden select-none`}
+      style={{ backgroundColor: 'var(--bg-canvas)', color: 'var(--text)' }}
+    >
       {/* =====================================================================
-          CUSTOM FIXED TOP HEADER
+          CUSTOM FIXED TOP HEADER & CAPSULE NAVIGATION BAR (DASHBOARD STYLE)
       ===================================================================== */}
-      <header className="h-11 shrink-0 bg-slate-900/95 border-b border-slate-800 px-4 flex items-center justify-between select-none z-40 backdrop-blur titlebar-drag-region">
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 via-violet-500 to-sky-500 flex items-center justify-center shadow-md shadow-indigo-500/20">
+      <header className="h-14 shrink-0 bg-white/90 dark:bg-[#0e0f17]/95 border-b border-slate-200/80 dark:border-slate-800/80 px-4 flex items-center justify-between select-none z-40 backdrop-blur titlebar-drag-region">
+        {/* Left: App Logo & Version */}
+        <div className="flex items-center gap-3 no-drag">
+          <div className="w-8 h-8 rounded-xl bg-[var(--bg-accent)] flex items-center justify-center text-white shadow-sm">
             <Zap className="w-4 h-4 text-white" />
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-bold tracking-tight text-sm text-white">SysInfo</span>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-medium">
-              v0.1.4 • SysInfo
+            <span className="font-bold tracking-tight text-sm text-slate-900 dark:text-white">SysInfo</span>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--bg-accent)]/15 text-[var(--bg-accent)] dark:text-indigo-300 border border-[var(--bg-accent)]/30 font-semibold tabular-nums">
+              v0.1.5
             </span>
           </div>
-          <span className="hidden md:inline-block text-xs text-slate-500 pl-2 border-l border-slate-800">
-            Drive Health & S.M.A.R.T., Storage Analyzer, Smart Junk Cleaner, Game Libraries & Port Inspector
-          </span>
         </div>
 
-        {/* Right Titlebar Controls */}
-        <div className="flex items-center gap-2.5 no-drag">
+        {/* Center: Top Capsule Navigation Bar */}
+        <nav className="no-drag hidden md:flex items-center">
+          <div className="p-1 rounded-full bg-slate-100 dark:bg-[#161724] border border-slate-200/80 dark:border-slate-800/80 flex items-center gap-1 shadow-sm">
+            {/* 1. ภาพรวม (Overview) */}
+            <button
+              onClick={() => {
+                setActiveTab('dashboard');
+                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'dashboard'
+                  ? 'bg-[var(--bg-accent)] text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
+              }`}
+            >
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              <span>ภาพรวม</span>
+            </button>
+
+            {/* 2. ไดรฟ์ (Drive Health) */}
+            <button
+              onClick={() => {
+                setActiveTab('health');
+                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'health'
+                  ? 'bg-[var(--bg-accent)] text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              <span>ไดรฟ์</span>
+              <span className="text-[9px] px-1 py-0.1 rounded font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                S.M.A.R.T.
+              </span>
+            </button>
+
+            {/* 3. แอป (Installed Apps) */}
+            <button
+              onClick={() => {
+                setActiveTab('apps');
+                markFeatureSeen('installed_apps');
+                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'apps'
+                  ? 'bg-[var(--bg-accent)] text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
+              }`}
+            >
+              <Package className="w-3.5 h-3.5" />
+              <span>แอป</span>
+              {!seenFeatures['installed_apps'] && (
+                <span className="text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-indigo-500/20 text-indigo-500 dark:text-indigo-300">
+                  New
+                </span>
+              )}
+            </button>
+
+            {/* 4. พื้นที่ (Storage) */}
+            <button
+              onClick={() => {
+                setActiveTab('storage');
+                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'storage'
+                  ? 'bg-[var(--bg-accent)] text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
+              }`}
+            >
+              <HardDrive className="w-3.5 h-3.5" />
+              <span>พื้นที่</span>
+            </button>
+
+            {/* 5. จัดระเบียบ (Organizer) */}
+            <button
+              onClick={() => {
+                setActiveTab('organizer');
+                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'organizer'
+                  ? 'bg-[var(--bg-accent)] text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
+              }`}
+            >
+              <FolderInput className="w-3.5 h-3.5" />
+              <span>จัดระเบียบ</span>
+            </button>
+
+            {/* 6. ขยะ (Junk Cleaner) */}
+            <button
+              onClick={() => {
+                setActiveTab('cleaner');
+                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'cleaner'
+                  ? 'bg-[var(--bg-accent)] text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
+              }`}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>ขยะ</span>
+              {totalAvailableJunkMB > 0 && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums bg-amber-500/20 text-amber-600 dark:text-amber-300">
+                  {formatSize(totalAvailableJunkMB)}
+                </span>
+              )}
+            </button>
+
+            {/* 7. เกม (Game Libraries) */}
+            <button
+              onClick={() => {
+                setActiveTab('games');
+                if (!gameLibrariesData && !isScanningGames) {
+                  handleScanGames();
+                }
+                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'games'
+                  ? 'bg-[var(--bg-accent)] text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
+              }`}
+            >
+              <Gamepad2 className="w-3.5 h-3.5" />
+              <span>เกม</span>
+              {gameLibrariesData?.gameCount > 0 && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums bg-fuchsia-500/20 text-fuchsia-600 dark:text-fuchsia-300">
+                  {gameLibrariesData.gameCount}
+                </span>
+              )}
+            </button>
+
+            {/* 8. พอร์ต (Ports & Conflicts) */}
+            <button
+              onClick={() => {
+                setActiveTab('ports');
+                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'ports'
+                  ? 'bg-[var(--bg-accent)] text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5'
+              }`}
+            >
+              <Network className="w-3.5 h-3.5" />
+              <span>พอร์ต</span>
+              {conflicts.length > 0 && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-bold animate-pulse tabular-nums">
+                  {conflicts.length}
+                </span>
+              )}
+            </button>
+          </div>
+        </nav>
+
+        {/* Right Titlebar Controls (Round Buttons) */}
+        <div className="flex items-center gap-2 no-drag">
           {totalCleanedSessionMB > 0 && (
-            <div className="hidden sm:flex items-center gap-1.5 text-xs bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-md">
+            <div className="hidden xl:flex items-center gap-1.5 text-xs bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-full tabular-nums">
               <Sparkles className="w-3.5 h-3.5" />
               <span>ได้พื้นที่คืน: {formatSize(totalCleanedSessionMB)}</span>
             </div>
           )}
 
+          {/* Quick Refresh round button */}
+          <button
+            onClick={() => {
+              handleTriggerStorageScan();
+              (window as any).electronAPI?.scanActivePorts?.().then((p: any) => p && setPorts(p));
+              (window as any).electronAPI?.getWindowsServices?.().then((s: any) => s && setWindowsServices(s));
+              handleScanBackground();
+              handleScanConflicts();
+              showToast('รีเฟรชข้อมูลสำเร็จ', 'อัปเดตข้อมูลระบบ ไดรฟ์ และพอร์ตล่าสุดแล้ว', 'info');
+            }}
+            className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/80 hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 transition cursor-pointer"
+            title="รีเฟรชข้อมูลระบบสด (Refresh Telemetry & Drives)"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isScanningStorage || isScanningConflicts ? 'animate-spin text-[var(--bg-accent)]' : ''}`} />
+          </button>
+
           {/* Quick Theme Switch Toggle */}
           <button
             onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
-            className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border transition ${
-              theme === 'light'
-                ? 'bg-amber-100/90 text-amber-900 border-amber-300 hover:bg-amber-200 shadow-sm'
-                : 'bg-slate-800/80 text-slate-200 border-slate-700 hover:bg-slate-700 hover:text-white'
-            }`}
+            className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/80 hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 transition cursor-pointer"
             title={theme === 'dark' ? 'สลับเป็นธีมสีขาว (Switch to Light Theme)' : 'สลับเป็นธีมมืด (Switch to Dark Theme)'}
           >
             {theme === 'dark' ? (
-              <>
-                <Sun className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">ธีมสีขาว</span>
-              </>
+              <Sun className="w-3.5 h-3.5 text-amber-400" />
             ) : (
-              <>
-                <Moon className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="hidden sm:inline">ธีมมืด</span>
-              </>
+              <Moon className="w-3.5 h-3.5 text-indigo-600" />
             )}
           </button>
 
+          {/* IPC Console round button */}
           <button
             onClick={() => setShowIpcConsole(!showIpcConsole)}
-            className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border transition ${
+            className={`w-8 h-8 rounded-full border transition flex items-center justify-center cursor-pointer ${
               showIpcConsole
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:bg-slate-800'
+                ? 'bg-amber-500/20 text-amber-500 dark:text-amber-300 border-amber-500/40'
+                : 'border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/80 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'
             }`}
-            title="ดูคำสั่งเชื่อมต่อ IPC Backend Console"
+            title={`ดูคำสั่งเชื่อมต่อ IPC Backend Console (${ipcLogs.length})`}
           >
-            <Terminal className="w-3.5 h-3.5 text-amber-400" />
-            <span>IPC Console ({ipcLogs.length})</span>
+            <Terminal className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
+          </button>
+
+          {/* Settings round button */}
+          <button
+            onClick={() => {
+              setActiveTab('settings');
+              mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className={`w-8 h-8 rounded-full border transition flex items-center justify-center cursor-pointer ${
+              activeTab === 'settings'
+                ? 'bg-[var(--bg-accent)] text-white border-[var(--bg-accent)] shadow-sm'
+                : 'border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/80 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'
+            }`}
+            title="การตั้งค่าระบบ (Settings & BETA Preferences)"
+          >
+            <Settings className="w-3.5 h-3.5" />
           </button>
 
           {/* Native Window Controls */}
-          <div className="flex items-center gap-1 pl-2 border-l border-slate-800">
+          <div className="flex items-center gap-1 pl-2 border-l border-slate-200 dark:border-slate-800">
             <button
               onClick={() => (window as any).electronAPI?.minimize?.()}
-              className="w-7 h-7 rounded hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition"
+              className="w-7 h-7 rounded hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
               title="ย่อหน้าต่าง (Minimize)"
             >
               <Minus className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => (window as any).electronAPI?.maximize?.()}
-              className="w-7 h-7 rounded hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition"
+              className="w-7 h-7 rounded hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
               title="ขยาย/คืนขนาดหน้าต่าง (Maximize)"
             >
               <Square className="w-3 h-3" />
             </button>
             <button
               onClick={() => (window as any).electronAPI?.close?.()}
-              className="w-7 h-7 rounded hover:bg-rose-600/80 flex items-center justify-center text-slate-400 hover:text-white transition"
+              className="w-7 h-7 rounded hover:bg-rose-600 hover:text-white flex items-center justify-center text-slate-500 dark:text-slate-400 transition cursor-pointer"
               title="ปิดโปรแกรม (Close)"
             >
               <X className="w-3.5 h-3.5" />
@@ -1475,266 +1751,9 @@ export default function App() {
       </header>
 
       {/* =====================================================================
-          MAIN BODY: FIXED LEFT SIDEBAR + INDEPENDENT SCROLLABLE RIGHT VIEWPORT
+          MAIN BODY: INDEPENDENT SCROLLABLE VIEWPORT (FULL-WIDTH DASHBOARD LAYOUT)
       ===================================================================== */}
       <div className="flex-1 flex overflow-hidden min-h-0">
-        {/* FIXED LEFT SIDEBAR (LOCKED IN PLACE) */}
-        <aside className="w-64 shrink-0 bg-slate-900/60 border-r border-slate-800/90 p-3 flex flex-col justify-between overflow-y-auto select-none z-30">
-          <div className="space-y-1.5">
-            <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              เมนูจัดการระบบ (Main Menu)
-            </div>
-
-            {/* Menu 1: Dashboard */}
-            <button
-              onClick={() => {
-                setActiveTab('dashboard');
-                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                activeTab === 'dashboard'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
-                  : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <LayoutDashboard className="w-4 h-4 shrink-0" />
-                <div className="text-left">
-                  <div>ภาพรวมระบบ</div>
-                  <div className={`text-[11px] ${activeTab === 'dashboard' ? 'text-indigo-200' : 'text-slate-500'}`}>
-                    Dashboard
-                  </div>
-                </div>
-              </div>
-            </button>
-
-            {/* Menu 2: Storage Analyzer */}
-            <button
-              onClick={() => {
-                setActiveTab('storage');
-                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                activeTab === 'storage'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
-                  : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <HardDrive className="w-4 h-4 shrink-0" />
-                <div className="text-left">
-                  <div>วิเคราะห์พื้นที่จัดเก็บ</div>
-                  <div className={`text-[11px] ${activeTab === 'storage' ? 'text-indigo-200' : 'text-slate-500'}`}>
-                    Storage Analyzer
-                  </div>
-                </div>
-              </div>
-            </button>
-
-            {/* Menu 2.1: Drive Health & S.M.A.R.T. Monitor */}
-            <button
-              onClick={() => {
-                setActiveTab('health');
-                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                activeTab === 'health'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
-                  : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Activity className="w-4 h-4 shrink-0" />
-                <div className="text-left">
-                  <div>สุขภาพไดรฟ์ & S.M.A.R.T.</div>
-                  <div className={`text-[11px] ${activeTab === 'health' ? 'text-indigo-200' : 'text-slate-500'}`}>
-                    SSD/HDD Health Monitor
-                  </div>
-                </div>
-              </div>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                S.M.A.R.T.
-              </span>
-            </button>
-
-            {/* Menu 2.5: File Organizer */}
-            <button
-              onClick={() => {
-                setActiveTab('organizer');
-                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                activeTab === 'organizer'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
-                  : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <FolderInput className="w-4 h-4 shrink-0" />
-                <div className="text-left">
-                  <div>จัดระเบียบไฟล์</div>
-                  <div className={`text-[11px] ${activeTab === 'organizer' ? 'text-indigo-200' : 'text-slate-500'}`}>
-                    File Organizer
-                  </div>
-                </div>
-              </div>
-            </button>
-
-            {/* Menu 3: Junk Cleaner */}
-            <button
-              onClick={() => {
-                setActiveTab('cleaner');
-                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                activeTab === 'cleaner'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
-                  : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Trash2 className="w-4 h-4 shrink-0" />
-                <div className="text-left">
-                  <div>ล้างไฟล์ขยะและแคช</div>
-                  <div className={`text-[11px] ${activeTab === 'cleaner' ? 'text-indigo-200' : 'text-slate-500'}`}>
-                    Smart Cleaner
-                  </div>
-                </div>
-              </div>
-              {totalAvailableJunkMB > 0 && (
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  {formatSize(totalAvailableJunkMB)}
-                </span>
-              )}
-            </button>
-
-            {/* Menu 4: Ports, Services, Background & Conflicts */}
-            <button
-              onClick={() => {
-                setActiveTab('ports');
-                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                activeTab === 'ports'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
-                  : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Network className="w-4 h-4 shrink-0" />
-                <div className="text-left">
-                  <div>พอร์ต, โปรแกรมพื้นหลัง & ข้อขัดแย้ง</div>
-                  <div className={`text-[11px] ${activeTab === 'ports' ? 'text-indigo-200' : 'text-slate-500'}`}>
-                    Ports, Background & Conflicts
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {conflicts.length > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold animate-pulse">
-                    {conflicts.length}
-                  </span>
-                )}
-              </div>
-            </button>
-
-            {/* Menu 4.5: Installed Apps & Smart Uninstall */}
-            <button
-              onClick={() => {
-                setActiveTab('apps');
-                markFeatureSeen('installed_apps');
-                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                activeTab === 'apps'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
-                  : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Package className="w-4 h-4 shrink-0" />
-                <div className="text-left">
-                  <div>โปรแกรมที่ติดตั้ง</div>
-                  <div className={`text-[11px] ${activeTab === 'apps' ? 'text-indigo-200' : 'text-slate-500'}`}>
-                    Installed Apps
-                  </div>
-                </div>
-              </div>
-              {!seenFeatures['installed_apps'] && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold animate-pulse">
-                  New
-                </span>
-              )}
-            </button>
-
-            {/* Menu 5: Settings */}
-            <button
-              onClick={() => {
-                setActiveTab('settings');
-                mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                activeTab === 'settings'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
-                  : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Settings className="w-4 h-4 shrink-0" />
-                <div className="text-left">
-                  <div>การตั้งค่า & ถอนการติดตั้ง</div>
-                  <div className={`text-[11px] ${activeTab === 'settings' ? 'text-indigo-200' : 'text-slate-500'}`}>
-                    Settings & Uninstall
-                  </div>
-                </div>
-              </div>
-            </button>
-          </div>
-
-          {/* Live Resource Monitor Box in Sidebar */}
-          <div className="mt-6 pt-4 border-t border-slate-800/80 space-y-3">
-            <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
-              <span className="flex items-center gap-1.5 text-slate-300">
-                <Cpu className="w-3.5 h-3.5 text-sky-400" /> CPU Load
-              </span>
-              <span className="font-mono text-white">{cpuUsage}%</span>
-            </div>
-            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-              <div
-                className={`h-full transition-all duration-500 ${
-                  cpuUsage >= 80 ? 'bg-rose-500' : cpuUsage >= 50 ? 'bg-amber-500' : 'bg-sky-400'
-                }`}
-                style={{ width: `${cpuUsage}%` }}
-              />
-            </div>
-
-            <div className="flex items-center justify-between text-xs text-slate-400 font-medium pt-1">
-              <span className="flex items-center gap-1.5 text-slate-300">
-                <MemoryStick className="w-3.5 h-3.5 text-indigo-400" /> RAM Used
-              </span>
-              <span className="font-mono text-white">
-                {ramUsageGB} / {totalRamGB} GB
-              </span>
-            </div>
-            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-indigo-500 transition-all duration-500"
-                style={{ width: `${Math.round((ramUsageGB / (totalRamGB || 1)) * 100)}%` }}
-              />
-            </div>
-
-            <div className="pt-2 text-[11px] text-slate-500 flex items-center justify-between">
-              <span>ไดรฟ์ที่ตรวจพบ: {systemDrives.length}</span>
-              <span className="text-emerald-400 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live Telemetry
-              </span>
-            </div>
-          </div>
-        </aside>
-
-        {/* =====================================================================
-            INDEPENDENT SCROLLABLE VIEWPORT FOR TABS (LOCKED LAYOUT)
-        ===================================================================== */}
         <main ref={mainViewportRef} className="flex-1 p-4 md:p-6 overflow-y-auto h-full space-y-6">
           {/* Toast Notification Floating Banner */}
           {toasts.length > 0 && (
@@ -1763,19 +1782,24 @@ export default function App() {
           )}
 
           {/* =================================================================
-              TAB 1: DASHBOARD (ภาพรวมระบบ)
+              TAB 1: DASHBOARD (ภาพรวมระบบ - DASHBOARD STYLE)
           ================================================================= */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
               {/* Top Heading */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
-                    ภาพรวมสถานะระบบคอมพิวเตอร์ (System Overview)
-                  </h1>
-                  <p className="text-sm text-slate-400">
-                    เข้าถึงฮาร์ดแวร์จริง ไดรฟ์จริง ตรวจจับโปรแกรมพื้นหลัง และวิเคราะห์ข้อขัดแย้งในเครื่อง
-                  </p>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-[var(--bg-accent)] shrink-0">
+                    <LayoutDashboard className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                      ภาพรวมสถานะระบบคอมพิวเตอร์ (System Overview)
+                    </h1>
+                    <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400">
+                      มอนิเตอร์ไดรฟ์จริง ตรวจสุขภาพฮาร์ดแวร์ วิเคราะห์พอร์ต และล้างข้อมูลขยะในเครื่อง
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2.5">
                   <button
@@ -1786,14 +1810,14 @@ export default function App() {
                       handleScanBackground();
                       handleScanConflicts();
                     }}
-                    className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition"
+                    className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-sm transition cursor-pointer"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isScanningStorage || isScanningConflicts ? 'animate-spin text-indigo-400' : ''}`} />
+                    <RefreshCw className={`w-3.5 h-3.5 ${isScanningStorage || isScanningConflicts ? 'animate-spin text-[var(--bg-accent)]' : ''}`} />
                     <span>รีเฟรชข้อมูล</span>
                   </button>
                   <button
                     onClick={() => setActiveTab('cleaner')}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 transition"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--bg-accent)] hover:opacity-90 text-white text-xs font-semibold shadow-sm transition cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>เริ่มล้างไฟล์ขยะ</span>
@@ -1803,19 +1827,19 @@ export default function App() {
 
               {/* Conflict Alert Banner if any conflicts exist */}
               {conflicts.length > 0 && (
-                <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-rose-950/20">
+                <div className="p-4 rounded-[20px] bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
                   <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30 shrink-0">
+                    <div className="p-2.5 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 shrink-0">
                       <AlertTriangle className="w-5 h-5 animate-bounce" />
                     </div>
                     <div>
-                      <div className="text-sm font-bold text-white flex items-center gap-2">
+                      <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         <span>ตรวจพบโปรแกรมขัดการทำงานกัน {conflicts.length} รายการ</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/30 text-rose-200 font-semibold">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-700 dark:text-rose-200 font-semibold">
                           ตรวจพบข้อขัดแย้ง
                         </span>
                       </div>
-                      <p className="text-xs text-rose-200/80 mt-0.5">
+                      <p className="text-xs text-rose-700/80 dark:text-rose-200/80 mt-0.5">
                         พบพอร์ตชนกัน โปรเซสเปิดค้างซ้ำซ้อน หรือโปรแกรมเบื้องหลังที่แย่งทรัพยากร อาจส่งผลให้แอปอื่นทำงานผิดพลาด
                       </p>
                     </div>
@@ -1825,7 +1849,7 @@ export default function App() {
                       setActiveTab('ports');
                       setPortSubTab('conflicts');
                     }}
-                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30 transition shrink-0 flex items-center gap-1.5"
+                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow transition shrink-0 flex items-center gap-1.5 cursor-pointer"
                   >
                     <span>ตรวจสอบข้อขัดแย้ง</span>
                     <span>→</span>
@@ -1833,370 +1857,513 @@ export default function App() {
                 </div>
               )}
 
-              {/* 4 Overview Quick Cards */}
+              {/* 4 Distinct KPI Cards Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Junk Card */}
-                <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col justify-between">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="text-xs text-slate-400 font-medium">ไฟล์ขยะและแคชที่พร้อมล้าง</span>
-                      <div className="text-2xl font-bold text-white mt-1">
-                        {formatSize(totalAvailableJunkMB)}
-                      </div>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                      <Trash2 className="w-5 h-5" />
-                    </div>
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                    <span className="text-slate-400">เลือก: {formatSize(totalSelectedJunkMB)}</span>
-                    <button
-                      onClick={() => setActiveTab('cleaner')}
-                      className="text-amber-400 hover:text-amber-300 font-medium"
-                    >
-                      จัดการ →
-                    </button>
-                  </div>
-                </div>
-
-                {/* Active Ports Card */}
-                <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col justify-between">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="text-xs text-slate-400 font-medium">พอร์ตที่เปิดใช้งานจริง</span>
-                      <div className="text-2xl font-bold text-white mt-1">{ports.length} พอร์ต</div>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                      <Network className="w-5 h-5" />
-                    </div>
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                    <span className="text-slate-400">
-                      Service ผูก: {ports.filter((p) => p.serviceName).length}
-                    </span>
-                    <button
-                      onClick={() => {
-                        setActiveTab('ports');
-                        setPortSubTab('ports');
-                      }}
-                      className="text-sky-400 hover:text-sky-300 font-medium"
-                    >
-                      ดูพอร์ต →
-                    </button>
-                  </div>
-                </div>
-
-                {/* Background Programs Card */}
-                <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col justify-between">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="text-xs text-slate-400 font-medium">โปรแกรมพื้นหลังทั้งหมด</span>
-                      <div className="text-2xl font-bold text-white mt-1">{backgroundProcs.length} โปรเซส</div>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                      <Layers className="w-5 h-5" />
-                    </div>
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                    <span className="text-slate-400">
-                      แอปผู้ใช้: {backgroundProcs.filter((p) => p.category === 'user_app').length} ตัว
-                    </span>
-                    <button
-                      onClick={() => {
-                        setActiveTab('ports');
-                        setPortSubTab('background');
-                      }}
-                      className="text-indigo-400 hover:text-indigo-300 font-medium"
-                    >
-                      ย่อดรอปดาวน์ดู →
-                    </button>
-                  </div>
-                </div>
-
-                {/* Conflicts & Collisions Card */}
-                <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col justify-between">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="text-xs text-slate-400 font-medium">ข้อขัดแย้งในระบบ</span>
-                      <div className={`text-2xl font-bold mt-1 ${conflicts.length > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                        {conflicts.length > 0 ? `${conflicts.length} รายการ` : 'ปกติ (0)'}
-                      </div>
-                    </div>
-                    <div className={`p-2.5 rounded-xl ${conflicts.length > 0 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
-                      {conflicts.length > 0 ? <AlertTriangle className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
-                    </div>
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                    <span className="text-slate-400">
-                      {conflicts.length > 0 ? 'ต้องตรวจสอบ' : 'ระบบราบรื่น'}
-                    </span>
-                    <button
-                      onClick={() => {
-                        setActiveTab('ports');
-                        setPortSubTab('conflicts');
-                      }}
-                      className="text-rose-400 hover:text-rose-300 font-medium"
-                    >
-                      เช็คข้อขัดแย้ง →
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Drive Health Quick Banner (v0.1.4) */}
-              <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md ${
-                theme === 'light'
-                  ? 'bg-gradient-to-r from-indigo-50 to-emerald-50 border-indigo-200'
-                  : 'bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border-indigo-500/30'
-              }`}>
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shrink-0">
-                    <Activity className="w-5 h-5 text-indigo-400" />
-                  </div>
+                {/* KPI Card 1: พื้นที่ใช้ไป (Storage Used) */}
+                <div className="p-5 rounded-[20px] bg-white dark:bg-[#1b1c2a] border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex flex-col justify-between">
                   <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-sm font-bold ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>
-                        ตรวจสุขภาพฮาร์ดแวร์ Physical Drive & S.M.A.R.T. Monitor
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        พื้นที่ใช้ไป (Storage Used)
                       </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                        NEW v0.1.4
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono">
+                        {systemDrives.length} ไดรฟ์
                       </span>
                     </div>
-                    <p className={`text-xs mt-0.5 ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
-                      ตรวจวัดความทนทาน (Wear Level), อุณหภูมิ (°C), ข้อผิดพลาดการอ่าน/เขียน และสถานะความสมบูรณ์ของ SSD/HDD แบบ Read-only
-                    </p>
+                    <div className="mt-2 flex items-baseline gap-1">
+                      <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">
+                        ใช้ {totalUsedGB} GB
+                      </span>
+                      <span className="text-xs text-slate-400 tabular-nums">/ {totalCapacityGB} GB</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      {totalUsedPercent}% ของพื้นที่ทั้งหมด (ว่าง {totalFreeGB} GB)
+                    </div>
+                  </div>
+
+                  {/* Visual: Horizontal partitioned bar showing breakdown per drive */}
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
+                    <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                      {systemDrives.map((d, i) => {
+                        const driveWeight = (d.totalGB / (totalCapacityGB || 1)) * 100;
+                        const driveUsedInDrive = (d.usedGB / (d.totalGB || 1));
+                        const colors = ['bg-[var(--bg-accent)]', 'bg-[var(--bg-accent-2)]', 'bg-sky-500', 'bg-emerald-500'];
+                        return (
+                          <div
+                            key={d.id || d.letter}
+                            style={{ width: `${driveWeight}%` }}
+                            className="h-full flex"
+                            title={`ไดรฟ์ ${d.letter}: ${d.usedGB}/${d.totalGB} GB`}
+                          >
+                            <div
+                              className={`h-full ${colors[i % colors.length]}`}
+                              style={{ width: `${driveUsedInDrive * 100}%` }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                      {systemDrives.slice(0, 3).map((d) => (
+                        <span key={d.letter} className="tabular-nums font-mono font-medium">
+                          {d.letter} {d.usedGB}G / {d.totalGB}G
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
-                <button
-                  onClick={() => {
-                    setActiveTab('health');
-                    mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5 shrink-0 cursor-pointer"
-                >
-                  <span>เปิดตรวจสุขภาพไดรฟ์</span>
-                  <span>→</span>
-                </button>
-              </div>
+                {/* KPI Card 2: สุขภาพไดรฟ์ (Drive Health) */}
+                <div className="p-5 rounded-[20px] bg-white dark:bg-[#1b1c2a] border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        สุขภาพไดรฟ์ & S.M.A.R.T.
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider border border-emerald-500/30">
+                        S.M.A.R.T.
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      <span className={`text-2xl font-bold tabular-nums ${driveHealthSummary.textClass}`}>
+                        {driveHealthSummary.label}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      {driveHealthSummary.desc}
+                    </div>
+                  </div>
 
-              {/* Real Drives Overview */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    <HardDrive className="w-4 h-4 text-indigo-400" />
-                    <span>ไดรฟ์จริงที่ตรวจพบในเครื่องคอมพิวเตอร์ ({systemDrives.length} ไดรฟ์)</span>
-                  </h3>
-                  <span className="text-xs text-slate-400">อ่านข้อมูลพื้นที่จริงจาก Windows Storage API</span>
+                  {/* Visual: Smooth SVG trend line curve */}
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                    <div className="text-emerald-500 dark:text-emerald-400">
+                      <svg className="w-full h-8" viewBox="0 0 160 32" fill="none">
+                        <path
+                          d="M 0 20 Q 20 12, 40 16 T 80 10 T 120 15 T 160 11"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                        />
+                        <path
+                          d="M 0 20 Q 20 12, 40 16 T 80 10 T 120 15 T 160 11 L 160 32 L 0 32 Z"
+                          fill="currentColor"
+                          fillOpacity="0.12"
+                        />
+                      </svg>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {systemDrives.map((drive) => {
-                    const usedColor =
-                      drive.usedPercent >= 90
-                        ? 'from-rose-500 to-rose-600'
-                        : drive.usedPercent >= 75
-                        ? 'from-amber-500 to-orange-500'
-                        : 'from-sky-500 to-indigo-500';
-                    return (
-                      <div key={drive.id} className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="p-3 rounded-xl bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
-                              <HardDrive className="w-6 h-6" />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-bold text-white">{drive.name}</h4>
-                                <span className="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
-                                  {drive.fileSystem}
-                                </span>
+                {/* KPI Card 3: ไฟล์ขยะที่ล้างได้ (Junk Cleanable) */}
+                <div className="p-5 rounded-[20px] bg-white dark:bg-[#1b1c2a] border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        ไฟล์ขยะและแคชที่พร้อมล้าง
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold border border-amber-500/30">
+                        พร้อมล้าง
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      <span className="text-2xl font-bold text-amber-500 dark:text-amber-400 tabular-nums">
+                        {formatSize(totalAvailableJunkMB)}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      พร้อมล้างทันที ({junkCategories.length} หมวดหมู่)
+                    </div>
+                  </div>
+
+                  {/* Visual: Segmented bar breakdown (System / Browser / Shader) */}
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-1.5">
+                    <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                      <div className="h-full bg-amber-500" style={{ width: '45%' }} title="แคชระบบ" />
+                      <div className="h-full bg-sky-500" style={{ width: '35%' }} title="แคชเบราว์เซอร์" />
+                      <div className="h-full bg-purple-500" style={{ width: '20%' }} title="แคช Shader" />
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                      <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> ระบบ</span>
+                      <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-sky-500" /> เบราว์เซอร์</span>
+                      <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-purple-500" /> Shader</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* KPI Card 4: พอร์ตที่เปิดอยู่ (Active Ports & Conflicts) */}
+                <div className="p-5 rounded-[20px] bg-white dark:bg-[#1b1c2a] border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        พอร์ตเปิด & ข้อขัดแย้ง
+                      </span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
+                        conflicts.length > 0
+                          ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                          : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                      }`}>
+                        {conflicts.length > 0 ? `${conflicts.length} ข้อขัดแย้ง` : 'ปกติ (0)'}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-baseline gap-1.5">
+                      <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">
+                        {ports.length} พอร์ต
+                      </span>
+                      {conflicts.length > 0 && (
+                        <span className="text-xs font-bold text-rose-500 dark:text-rose-400 tabular-nums">
+                          (+ขัดแย้ง {conflicts.length})
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      ผูกกับ Service ของระบบ {ports.filter((p) => p.serviceName).length} ตัว
+                    </div>
+                  </div>
+
+                  {/* Visual: Chips of top 3 prominent ports */}
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                    <div className="flex items-center gap-1.5 overflow-hidden">
+                      {(ports.slice(0, 3).length > 0 ? ports.slice(0, 3) : [{ port: 80, protocol: 'TCP' }, { port: 443, protocol: 'TCP' }, { port: 8080, protocol: 'TCP' }]).map((p: any, i: number) => (
+                        <span
+                          key={i}
+                          className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-mono font-medium text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 tabular-nums truncate"
+                        >
+                          {p.protocol || 'TCP'}:{p.port}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Master-Detail Layout: Left Dark Drive List + Right Accent Details */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Left Panel: Dark List Panel (5 cols) */}
+                <div className="col-span-12 lg:col-span-5 bg-[#1c1d2b] dark:bg-[#0e0f17] text-white p-5 rounded-[20px] border border-slate-800 space-y-4 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                        <HardDrive className="w-4 h-4 text-[var(--bg-accent)]" />
+                        <span>รายการไดรฟ์จริง (Detected Drives)</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-400">คลิกเลือกไดรฟ์เพื่อดูรายละเอียด</p>
+                    </div>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300 font-mono tabular-nums">
+                      {systemDrives.length} ไดรฟ์
+                    </span>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {systemDrives.map((drive) => {
+                      const isSelected = (overviewSelectedDrive === drive.letter) || (!overviewSelectedDrive && drive === systemDrives[0]);
+                      return (
+                        <div
+                          key={drive.id || drive.letter}
+                          onClick={() => setOverviewSelectedDrive(drive.letter)}
+                          className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-white/10 border-[var(--bg-accent)] ring-1 ring-[var(--bg-accent)]/40 shadow-sm'
+                              : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-800/60 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`p-2 rounded-lg ${isSelected ? 'bg-[var(--bg-accent)] text-white' : 'bg-slate-800 text-slate-400'}`}>
+                                <HardDrive className="w-4 h-4" />
                               </div>
-                              <p className="text-xs text-slate-400">ความจุทั้งหมด: {drive.totalGB} GB</p>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-sm text-white">ไดรฟ์ {drive.letter}</span>
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
+                                    {drive.fileSystem}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-slate-400 truncate max-w-[150px]">{drive.name}</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-xs font-bold tabular-nums text-white">
+                                ว่าง {drive.freeGB} GB
+                              </div>
+                              <div className="text-[10px] text-slate-400 tabular-nums">
+                                ใช้ {drive.usedPercent}% ({drive.usedGB} GB)
+                              </div>
                             </div>
                           </div>
-                          <div className="text-right">
+
+                          <div className="w-full h-1.5 bg-slate-800/90 rounded-full overflow-hidden mt-2.5">
                             <div
-                              className={`text-sm font-bold ${
-                                drive.usedPercent >= 90
-                                  ? 'text-rose-400'
-                                  : drive.usedPercent >= 75
-                                  ? 'text-amber-400'
-                                  : 'text-emerald-400'
-                              }`}
-                            >
-                              ว่าง {drive.freeGB} GB
-                            </div>
-                            <div className="text-xs text-slate-400">
-                              ใช้ไป {drive.usedGB} GB ({drive.usedPercent}%)
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Usage Progress Bar */}
-                        <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
-                          <div
-                            className={`h-full rounded-full bg-gradient-to-r ${usedColor} transition-all duration-500 keep-gradient`}
-                            style={{ width: `${drive.usedPercent}%` }}
-                          />
-                        </div>
-
-                        <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
-                          <span className="flex items-center gap-1.5">
-                            <span
-                              className={`w-2 h-2 rounded-full ${
+                              className={`h-full rounded-full transition-all duration-500 ${
                                 drive.usedPercent >= 90
                                   ? 'bg-rose-500'
                                   : drive.usedPercent >= 75
                                   ? 'bg-amber-500'
-                                  : 'bg-emerald-500'
+                                  : 'bg-[var(--bg-accent)]'
                               }`}
+                              style={{ width: `${drive.usedPercent}%` }}
                             />
-                            สถานะ: {drive.status === 'critical' ? 'พื้นที่ใกล้เต็ม' : drive.status === 'warning' ? 'ใช้งานค่อนข้างมาก' : 'ปกติ'}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Live Resource Telemetry Widget (from old sidebar) */}
+                  <div className="pt-4 border-t border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between text-xs text-slate-400">
+                      <span className="flex items-center gap-1.5 text-slate-200">
+                        <Cpu className="w-3.5 h-3.5 text-sky-400" /> การทำงานของ CPU
+                      </span>
+                      <span className="font-mono tabular-nums text-white font-semibold">{cpuUsage}%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-500 ${
+                          cpuUsage >= 80 ? 'bg-rose-500' : cpuUsage >= 50 ? 'bg-amber-500' : 'bg-sky-400'
+                        }`}
+                        style={{ width: `${cpuUsage}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+                      <span className="flex items-center gap-1.5 text-slate-200">
+                        <MemoryStick className="w-3.5 h-3.5 text-indigo-400" /> การใช้งาน RAM
+                      </span>
+                      <span className="font-mono tabular-nums text-white font-semibold">
+                        {ramUsageGB} / {totalRamGB} GB
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[var(--bg-accent)] transition-all duration-500"
+                        style={{ width: `${Math.round((ramUsageGB / (totalRamGB || 1)) * 100)}%` }}
+                      />
+                    </div>
+
+                    <div className="pt-1 text-[11px] text-slate-400 flex items-center justify-between">
+                      <span>ตรวจพบ {systemDrives.length} ไดรฟ์</span>
+                      <span className="text-emerald-400 flex items-center gap-1.5 font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live Telemetry
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Panel: Accent Detail Panel (7 cols) */}
+                <div className="col-span-12 lg:col-span-7 bg-white dark:bg-[#1b1c2a] border border-slate-200/80 dark:border-slate-800 p-5 rounded-[20px] space-y-5 shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-[var(--bg-accent)] text-white shadow-sm">
+                        <HardDrive className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                            รายละเอียดไดรฟ์ {currentOverviewDrive?.letter || 'C:'}
+                          </h3>
+                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--bg-accent)]/15 text-[var(--bg-accent)] dark:text-indigo-300 font-semibold border border-[var(--bg-accent)]/30">
+                            {currentOverviewDrive?.fileSystem || 'NTFS'}
                           </span>
-                          <button
-                            onClick={() => {
-                              setSelectedDrive(drive.letter);
-                              setActiveTab('storage');
-                              handleTriggerStorageScan(drive.letter);
-                            }}
-                            className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition"
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {currentOverviewDrive?.name || 'Local Fixed Disk'} · ความจุทั้งหมด {currentOverviewDrive?.totalGB || 0} GB
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Pill tabs switch */}
+                    <div className="inline-flex p-1 rounded-full bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 text-xs">
+                      {[
+                        { id: 'smart', label: 'ข้อมูล S.M.A.R.T.' },
+                        { id: 'files', label: 'ไฟล์ขนาดใหญ่' },
+                        { id: 'folders', label: 'สัดส่วนโฟลเดอร์' }
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setOverviewDetailTab(tab.id as any)}
+                          className={`px-3 py-1 rounded-full font-medium transition cursor-pointer ${
+                            overviewDetailTab === tab.id
+                              ? 'bg-[var(--bg-accent)] text-white shadow-sm'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Detail Tab 1: S.M.A.R.T. Metrics */}
+                  {overviewDetailTab === 'smart' && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80">
+                          <span className="text-[10px] text-slate-400 block font-semibold uppercase">สถานะสุขภาพ</span>
+                          <span className="font-bold text-sm text-emerald-500 dark:text-emerald-400 flex items-center gap-1 mt-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> ปกติ (Healthy)
+                          </span>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80">
+                          <span className="text-[10px] text-slate-400 block font-semibold uppercase">ชนิดสื่อ & บัส</span>
+                          <span className="font-bold text-sm text-slate-800 dark:text-slate-200 mt-1 block">
+                            SSD · NVMe/SATA
+                          </span>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80">
+                          <span className="text-[10px] text-slate-400 block font-semibold uppercase">อุณหภูมิ</span>
+                          <span className="font-bold text-sm text-slate-800 dark:text-slate-200 mt-1 block tabular-nums">
+                            ~38 °C (ปกติ)
+                          </span>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80">
+                          <span className="text-[10px] text-slate-400 block font-semibold uppercase">พื้นที่คงเหลือ</span>
+                          <span className="font-bold text-sm text-[var(--bg-accent)] mt-1 block tabular-nums">
+                            {currentOverviewDrive?.freeGB || 0} GB
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800/80 space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-slate-700 dark:text-slate-300">สัดส่วนพื้นที่ที่ใช้งานไป:</span>
+                          <span className="font-mono tabular-nums text-slate-600 dark:text-slate-400">
+                            {currentOverviewDrive?.usedGB || 0} GB / {currentOverviewDrive?.totalGB || 0} GB ({currentOverviewDrive?.usedPercent || 0}%)
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-[var(--bg-accent)] rounded-full transition-all duration-500"
+                            style={{ width: `${currentOverviewDrive?.usedPercent || 0}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3 pt-2">
+                        <button
+                          onClick={() => {
+                            if (currentOverviewDrive) setSelectedDrive(currentOverviewDrive.letter);
+                            setActiveTab('storage');
+                            handleTriggerStorageScan(currentOverviewDrive?.letter);
+                          }}
+                          className="px-4 py-2 rounded-xl bg-[var(--bg-accent)] hover:opacity-90 text-white text-xs font-semibold shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <span>วิเคราะห์พื้นที่ไดรฟ์นี้</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setActiveTab('health');
+                            mainViewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Activity className="w-3.5 h-3.5 text-[var(--bg-accent)]" />
+                          <span>ตรวจสุขภาพ S.M.A.R.T. เต็มรูปแบบ</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Detail Tab 2: Large Files on this Drive */}
+                  {overviewDetailTab === 'files' && (
+                    <div className="space-y-3">
+                      {overviewDriveFiles.length === 0 ? (
+                        <div className="py-8 text-center text-xs text-slate-400">
+                          ยังไม่มีข้อมูลไฟล์ใหญ่สำหรับไดรฟ์นี้ กดปุ่มรีเฟรชเพื่อสแกน
+                        </div>
+                      ) : (
+                        overviewDriveFiles.map((item) => (
+                          <div
+                            key={item.id}
+                            className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3 hover:border-slate-300 dark:hover:border-slate-700 transition"
                           >
-                            วิเคราะห์ไดรฟ์นี้ →
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Quick Preview: Top Large Files & Real Directory Breakdown */}
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                {/* Large Files Preview */}
-                <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-bold text-white flex items-center gap-2">
-                        <Layers className="w-4 h-4 text-indigo-400" />
-                        <span>ไฟล์ขนาดใหญ่ที่พบบนเครื่องจริง</span>
-                      </h3>
-                      <p className="text-xs text-slate-400">ค้นพบไฟล์ระดับร้อย MB และ GB</p>
-                    </div>
-                    <button
-                      onClick={() => setActiveTab('storage')}
-                      className="text-xs text-indigo-400 hover:text-indigo-300 font-medium"
-                    >
-                      ดูทั้งหมด ({largeFiles.length}) →
-                    </button>
-                  </div>
-
-                  <div className="space-y-2.5">
-                    {largeFiles.length === 0 ? (
-                      <div className="py-6 text-center text-xs text-slate-500">
-                        {isScanningStorage ? 'กำลังสแกนไฟล์บนไดรฟ์จริง...' : 'ยังไม่มีข้อมูลไฟล์ใหญ่ กดปุ่มรีเฟรชเพื่อสแกน'}
-                      </div>
-                    ) : (
-                      largeFiles.slice(0, 4).map((item) => (
-                        <div
-                          key={item.id}
-                          className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between gap-3 hover:border-slate-700 transition"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-sm text-slate-100 truncate">{item.name}</span>
-                              <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 shrink-0">
-                                {item.category}
-                              </span>
-                              {item.isRecentlyMoved && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 shrink-0">
-                                  ย้ายแล้ว
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-xs md:text-sm text-slate-900 dark:text-slate-100 truncate">{item.name}</span>
+                                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
+                                  {item.category}
                                 </span>
-                              )}
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono truncate mt-0.5">{item.path}</div>
                             </div>
-                            <div className="text-xs text-slate-400 font-mono truncate mt-0.5">{item.path}</div>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="text-sm font-bold text-amber-400 font-mono mr-1">
-                              {formatSize(item.sizeMB)}
-                            </span>
-                            <button
-                              onClick={() => handleOpenFolder(item.path)}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
-                              title="เปิดโฟลเดอร์ใน Explorer"
-                            >
-                              <FolderOpen className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleMoveFile(item)}
-                              disabled={isMovingFile}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-sky-600/30 hover:text-sky-300 text-slate-300 transition"
-                              title="ย้ายไฟล์ (Move File)"
-                            >
-                              <FolderInput className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirmModal({ file: item })}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600/30 hover:text-rose-300 text-slate-300 transition"
-                              title="ลบไฟล์นี้ (Delete File)"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* Directory Treemap Breakdown Preview */}
-                <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-bold text-white flex items-center gap-2">
-                        <HardDrive className="w-4 h-4 text-emerald-400" />
-                        <span>โฟลเดอร์ที่กินพื้นที่มากที่สุดจริงบนเครื่อง</span>
-                      </h3>
-                      <p className="text-xs text-slate-400">คำนวณสัดส่วนจากไฟล์ใหญ่จริง</p>
-                    </div>
-                    <button
-                      onClick={() => setActiveTab('storage')}
-                      className="text-xs text-indigo-400 hover:text-indigo-300 font-medium"
-                    >
-                      ดูผัง Treemap เต็ม →
-                    </button>
-                  </div>
-
-                  <div className="space-y-2.5">
-                    {directoryBreakdown.length === 0 ? (
-                      <div className="py-6 text-center text-xs text-slate-500">
-                        {isScanningStorage ? 'กำลังคำนวณขนาดโฟลเดอร์...' : 'ยังไม่มีข้อมูลโฟลเดอร์'}
-                      </div>
-                    ) : (
-                      directoryBreakdown.slice(0, 4).map((d) => (
-                        <div
-                          key={d.id}
-                          className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between gap-3"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-sm text-slate-100 truncate">{d.label}</span>
-                              <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 shrink-0">
-                                {d.badge}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-xs md:text-sm font-bold text-amber-500 font-mono tabular-nums">
+                                {formatSize(item.sizeMB)}
                               </span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-2">
-                              <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${d.percent}%` }} />
+                              <button
+                                onClick={() => handleOpenFolder(item.path)}
+                                className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition cursor-pointer"
+                                title="เปิดโฟลเดอร์ใน Windows Explorer"
+                              >
+                                <FolderOpen className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setDeleteConfirmModal({ file: item })}
+                                className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-rose-500/20 hover:text-rose-500 text-slate-700 dark:text-slate-300 transition cursor-pointer"
+                                title="ลบไฟล์นี้"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
-                          <div className="text-right shrink-0">
-                            <span className="text-sm font-bold text-emerald-400 font-mono">{d.sizeGB} GB</span>
-                            <div className="text-[11px] text-slate-400">{d.percent}%</div>
-                          </div>
+                        ))
+                      )}
+
+                      <div className="pt-2 text-right">
+                        <button
+                          onClick={() => setActiveTab('storage')}
+                          className="text-xs font-semibold text-[var(--bg-accent)] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>ดูไฟล์ขนาดใหญ่ทั้งหมดในหน้าวิเคราะห์พื้นที่</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Detail Tab 3: Folder Breakdown */}
+                  {overviewDetailTab === 'folders' && (
+                    <div className="space-y-3">
+                      {directoryBreakdown.length === 0 ? (
+                        <div className="py-8 text-center text-xs text-slate-400">
+                          ยังไม่มีข้อมูลการคำนวณโฟลเดอร์ กดปุ่มรีเฟรชเพื่อคำนวณ
                         </div>
-                      ))
-                    )}
-                  </div>
+                      ) : (
+                        directoryBreakdown.slice(0, 4).map((d) => (
+                          <div
+                            key={d.id}
+                            className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-xs md:text-sm text-slate-900 dark:text-slate-100 truncate">{d.label}</span>
+                                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
+                                  {d.badge}
+                                </span>
+                              </div>
+                              <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mt-2">
+                                <div className="h-full bg-[var(--bg-accent)] rounded-full" style={{ width: `${d.percent}%` }} />
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <span className="text-xs md:text-sm font-bold text-[var(--bg-accent)] font-mono tabular-nums">{d.sizeGB} GB</span>
+                              <div className="text-[11px] text-slate-400 tabular-nums">{d.percent}%</div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+
+                      <div className="pt-2 text-right">
+                        <button
+                          onClick={() => setActiveTab('storage')}
+                          className="text-xs font-semibold text-[var(--bg-accent)] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>ดูแผนผัง Treemap เต็มรูปแบบในหน้าวิเคราะห์พื้นที่</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -4846,66 +5013,286 @@ export default function App() {
           )}
 
           {/* =================================================================
+              TAB 4.8: GAME LIBRARIES ANALYZER (DEDICATED DASHBOARD VIEW)
+          ================================================================= */}
+          {activeTab === 'games' && (
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-[var(--bg-accent)] shrink-0">
+                    <Gamepad2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                      คลังเกมในเครื่องคอมพิวเตอร์ (Game Libraries Analyzer)
+                    </h1>
+                    <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400">
+                      ตรวจจับคลังเกมจริงจาก Steam, Riot Games (VALORANT), GRYPHLINK, Roblox และ Epic Games
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleScanGames}
+                    disabled={isScanningGames}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--bg-accent)] hover:opacity-90 disabled:opacity-50 text-white text-xs font-semibold shadow-sm transition cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isScanningGames ? 'animate-spin' : ''}`} />
+                    <span>{isScanningGames ? 'กำลังสแกนคลังเกม...' : 'รีเฟรชคลังเกม'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* KPI Summary Banner */}
+              <div className="p-5 rounded-[20px] bg-white dark:bg-[#1b1c2a] border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-2xl bg-[var(--bg-accent)]/15 text-[var(--bg-accent)] dark:text-indigo-300 border border-[var(--bg-accent)]/30">
+                    <Gamepad2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-base text-slate-900 dark:text-white">ตรวจพบเกมจริงในระบบ</span>
+                      <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-[var(--bg-accent)]/15 text-[var(--bg-accent)] dark:text-indigo-300 font-semibold border border-[var(--bg-accent)]/30 tabular-nums">
+                        {gameLibrariesData?.gameCount || 0} เกม
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      รวมโฟลเดอร์ติดตั้งเกมและไฟล์ขนาดใหญ่ของตัวเกมทั้งหมด
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="bg-slate-50 dark:bg-slate-900/80 px-4 py-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 text-right">
+                    <div className="text-[10px] text-slate-400 uppercase font-semibold">พื้นที่ติดตั้งเกมรวม</div>
+                    <div className="text-xl font-bold font-mono tabular-nums text-slate-900 dark:text-white">
+                      {gameLibrariesData?.totalGamesSizeGB || 0} GB
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Games Grid or Empty State */}
+              {!gameLibrariesData || !gameLibrariesData.games || gameLibrariesData.games.length === 0 ? (
+                <div className="p-12 text-center bg-white dark:bg-[#1b1c2a] rounded-[20px] border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-3">
+                  <Gamepad2 className="w-12 h-12 text-slate-400 mx-auto" />
+                  <div className="text-sm font-semibold text-slate-900 dark:text-white">ยังไม่มีข้อมูลคลังเกม</div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+                    กดปุ่มด้านล่างเพื่อเริ่มสแกนค้นหาเกมและโฟลเดอร์ไฟล์เกมในคอมพิวเตอร์ของคุณ
+                  </p>
+                  <button
+                    onClick={handleScanGames}
+                    disabled={isScanningGames}
+                    className="px-4 py-2 rounded-xl bg-[var(--bg-accent)] hover:opacity-90 text-white text-xs font-semibold shadow-sm transition cursor-pointer"
+                  >
+                    {isScanningGames ? 'กำลังสแกน...' : 'เริ่มสแกนคลังเกมทันที'}
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {gameLibrariesData.games.map((game: any) => {
+                    const launcherColor =
+                      game.launcher === 'Steam'
+                        ? 'bg-sky-500/15 text-sky-600 dark:text-sky-300 border-sky-500/30'
+                        : game.launcher === 'Riot Games'
+                        ? 'bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30'
+                        : game.launcher === 'Gryphline'
+                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30'
+                        : game.launcher === 'Roblox'
+                        ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30'
+                        : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30';
+
+                    return (
+                      <div
+                        key={game.id}
+                        className="p-5 rounded-[20px] bg-white dark:bg-[#1b1c2a] border border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition space-y-3 shadow-sm flex flex-col justify-between"
+                      >
+                        <div className="space-y-2.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h3 className="font-bold text-slate-900 dark:text-white text-sm" title={game.name}>
+                                {game.name}
+                              </h3>
+                              <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-semibold border ${launcherColor}`}>
+                                {game.launcher}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-mono tabular-nums font-bold text-base text-amber-500 dark:text-amber-400">
+                                {game.sizeGB} GB
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono tabular-nums">
+                                ({game.fileCount?.toLocaleString()} ไฟล์)
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono bg-slate-50 dark:bg-slate-900/70 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 truncate" title={game.installPath}>
+                            📁 {game.installPath}
+                          </div>
+
+                          {game.largestFile && game.largestFile.name && (
+                            <div className="text-[11px] bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800/80 p-2.5 rounded-xl space-y-0.5">
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold flex items-center justify-between">
+                                <span>ไฟล์ใหญ่สุดในเกม:</span>
+                                <span className="font-mono font-bold text-amber-500 dark:text-amber-400 tabular-nums">
+                                  {formatSize(game.largestFile.sizeMB)}
+                                </span>
+                              </div>
+                              <div className="text-slate-700 dark:text-slate-300 font-mono truncate text-[10px]" title={game.largestFile.path}>
+                                {game.largestFile.name}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Game Action Buttons */}
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-1.5">
+                          <button
+                            onClick={() => handleOpenFolder(game.installPath)}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition cursor-pointer"
+                            title="เปิดโฟลเดอร์เกมใน Windows Explorer"
+                          >
+                            <FolderOpen className="w-3.5 h-3.5 text-slate-400" />
+                            <span>เปิดโฟลเดอร์</span>
+                          </button>
+                          <button
+                            onClick={() => handleCopy(game.installPath, game.id)}
+                            className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition cursor-pointer"
+                            title="คัดลอกตำแหน่งพาธเกม"
+                          >
+                            {copiedId === game.id ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-500" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setStorageSearch(game.name);
+                              setSelectedStorageCategory('all');
+                              setStorageSubTab('heavy');
+                              setActiveTab('storage');
+                            }}
+                            className="flex items-center gap-1 py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition cursor-pointer"
+                            title="วิเคราะห์ไฟล์ของเกมนี้ใน Storage Analyzer"
+                          >
+                            <span>วิเคราะห์</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* =================================================================
               TAB 5: SETTINGS & UNINSTALL INSTRUCTIONS
           ================================================================= */}
           {activeTab === 'settings' && (
             <div className="space-y-6">
               {/* Header */}
               <div>
-                <h1 className="text-xl md:text-2xl font-bold text-white">การตั้งค่าระบบ (Settings & Preferences)</h1>
-                <p className="text-sm text-slate-400">
-                  ปรับแต่งพารามิเตอร์การทำงาน โทนสี ขนาดตัวหนังสือ และข้อมูลการจัดการถอนการติดตั้งโปรแกรม
+                <h1 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white">การตั้งค่าระบบ (Settings & Preferences)</h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  ปรับแต่งพารามิเตอร์การทำงาน โทนสี ฟอนต์ และการจัดการถอนการติดตั้งโปรแกรม
                 </p>
               </div>
 
-              {/* Setting 0: Appearance, Theme & Font Size */}
-              <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-5">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center">
-                      <Sun className="w-4 h-4 text-indigo-400" />
+              {/* Setting 0: Appearance, Theme & Typography */}
+              <div className="p-5 rounded-[20px] bg-white dark:bg-[#1b1c2a] border border-slate-200/80 dark:border-slate-800 space-y-6 shadow-sm">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-[var(--bg-accent)]/15 border border-[var(--bg-accent)]/30 flex items-center justify-center text-[var(--bg-accent)]">
+                      <Palette className="w-4 h-4" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-white">
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                         การแสดงผลและธีม (Appearance & Typography)
                       </h3>
-                      <p className="text-xs text-slate-400">
-                        ปรับแต่งโทนสีหน้าจอ และขนาดตัวหนังสือให้เหมาะกับสายตาและขนาดจอแสดงผล
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        ปรับแต่งโทนสี แสงหน้าจอ และรูปแบบตัวอักษรให้อ่านสบายตา
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Theme Selection */}
+                {/* 1. Theme Color (Accent Theme) with BETA Badge */}
                 <div className="space-y-3">
-                  <div className="text-xs font-semibold text-slate-200 flex items-center justify-between">
-                    <span>ธีมสีของแอปพลิเคชัน (Color Theme)</span>
-                    <span className="text-[11px] text-slate-400">สามารถกดปุ่มสลับบนหัวโปรแกรมได้เช่นกัน</span>
+                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span>เปลี่ยนสีธีม (Accent Color Theme)</span>
+                      <BetaBadge />
+                    </div>
+                    <span className="text-[11px] text-slate-400">สลับโทนสีเน้นทั่วทั้งแอปพลิเคชัน</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    {ACCENT_OPTIONS.map((opt) => {
+                      const isSelected = accentTheme === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setAccentTheme(opt.id)}
+                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                            isSelected
+                              ? 'border-[var(--bg-accent)] ring-2 ring-[var(--bg-accent)]/30 bg-slate-50 dark:bg-white/5 shadow-sm'
+                              : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900/60'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span
+                              className="w-5 h-5 rounded-full shadow-inner inline-block border border-black/10"
+                              style={{ backgroundColor: opt.hex }}
+                            />
+                            {isSelected && <Check className="w-3.5 h-3.5 text-[var(--bg-accent)]" />}
+                          </div>
+                          <div>
+                            <div className="font-bold text-xs text-slate-900 dark:text-white">{opt.name}</div>
+                            <div className="text-[10px] text-slate-400 font-mono tabular-nums">{opt.hex}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. Light / Dark Mode Toggle Cards */}
+                <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                    <span>โหมดสีหน้าจอ (Dark / Light Theme)</span>
+                    <span className="text-[11px] text-slate-400">สามารถกดปุ่มสลับบนหัวโปรแกรมได้ตลอดเวลา</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {/* Dark Theme Card */}
                     <button
                       type="button"
                       onClick={() => setTheme('dark')}
-                      className={`flex items-start gap-3.5 p-3.5 rounded-xl border text-left transition-all ${
+                      className={`flex items-start gap-3.5 p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                         theme === 'dark'
-                          ? 'bg-indigo-600/10 border-indigo-500 ring-2 ring-indigo-500/30 shadow-md'
-                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                          ? 'border-[var(--bg-accent)] ring-2 ring-[var(--bg-accent)]/30 bg-slate-50 dark:bg-white/5 shadow-sm'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900/60'
                       }`}
                     >
-                      <div className={`p-2.5 rounded-xl shrink-0 ${theme === 'dark' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                      <div className={`p-2.5 rounded-xl shrink-0 ${theme === 'dark' ? 'bg-[var(--bg-accent)] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
                         <Moon className="w-5 h-5" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-sm text-white">โหมดมืด (Dark Theme)</span>
+                          <span className="font-bold text-sm text-slate-900 dark:text-white">โหมดมืด (Dark Theme)</span>
                           {theme === 'dark' && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30 flex items-center gap-1">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-500 dark:text-indigo-300 font-semibold border border-indigo-500/30 flex items-center gap-1">
                               <Check className="w-3 h-3" /> ใช้งานอยู่
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
                           โทนสีมืด สบายตา ถนอมสายตา เหมาะสำหรับห้องแสงน้อยและการใช้งานต่อเนื่อง
                         </p>
                       </div>
@@ -4915,40 +5302,94 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setTheme('light')}
-                      className={`flex items-start gap-3.5 p-3.5 rounded-xl border text-left transition-all ${
+                      className={`flex items-start gap-3.5 p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                         theme === 'light'
-                          ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/30 shadow-md'
-                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                          ? 'border-amber-500 ring-2 ring-amber-500/30 bg-amber-50/50 shadow-sm'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900/60'
                       }`}
                     >
-                      <div className={`p-2.5 rounded-xl shrink-0 ${theme === 'light' ? 'bg-amber-500 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                      <div className={`p-2.5 rounded-xl shrink-0 ${theme === 'light' ? 'bg-amber-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
                         <Sun className="w-5 h-5" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-sm text-white">โหมดสีขาว (Light Theme)</span>
+                          <span className="font-bold text-sm text-slate-900 dark:text-white">โหมดสีขาว (Light Theme)</span>
                           {theme === 'light' && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500 font-semibold border border-amber-500/30 flex items-center gap-1">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 font-semibold border border-amber-500/30 flex items-center gap-1">
                               <Check className="w-3 h-3" /> ใช้งานอยู่
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                          โทนสีขาวสว่าง ชัดเจน คมชัด มองเห็นข้อมูลได้ง่ายแม้ในที่แสงสว่างจ้า
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                          โทนสีขาวสว่าง ผิวหน้ากระดาษ ชัดเจน คมชัด อ่านข้อมูลได้สบายตา
                         </p>
                       </div>
                     </button>
                   </div>
                 </div>
 
-                {/* Font Size Configuration */}
-                <div className="space-y-3 pt-3 border-t border-slate-800/80">
+                {/* 3. Typography (Font Picker) with BETA Badge */}
+                <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Type className="w-3.5 h-3.5 text-[var(--bg-accent)]" />
+                      <span>เปลี่ยน Font (Typography)</span>
+                      <BetaBadge />
+                    </div>
+                    <span className="text-[11px] text-slate-400">เลือกแบบอักษรสำหรับภาษาไทยและตัวเลข</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {FONT_OPTIONS.map((f) => {
+                      const isSelected = fontFamily === f.id;
+                      return (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => setFontFamily(f.id)}
+                          className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                            isSelected
+                              ? 'border-[var(--bg-accent)] ring-2 ring-[var(--bg-accent)]/30 bg-slate-50 dark:bg-white/5 shadow-sm'
+                              : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900/60'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-xs text-slate-900 dark:text-white" style={{ fontFamily: f.family }}>
+                              {f.name}
+                            </span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-[var(--bg-accent)]" />}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-1">{f.subtitle}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Live Font & Numbers Preview Card */}
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800/80 space-y-1.5">
+                    <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                      <span>ตัวอย่างการแสดงผลแบบสด (Live Font Preview):</span>
+                      <span className="text-[var(--bg-accent)] font-medium">มีผลทันทีทั่วทั้งโปรแกรม</span>
+                    </div>
+                    <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200">
+                      <p className="font-medium text-sm">
+                        SysInfo System Inspector: ตรวจสอบพอร์ต 127.0.0.1:8080 (PID 4920) ใช้งาน RAM 2.45 GB
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 tabular-nums">
+                        ความจุ 512.80 GB ว่าง 320.15 GB · The quick brown fox jumps over the lazy dog. 0123456789
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Font Size Configuration */}
+                <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
                   <div className="flex items-center justify-between">
-                    <div className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                    <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                       <Type className="w-3.5 h-3.5 text-indigo-400" />
                       <span>ขนาดตัวหนังสือ (Font Size)</span>
                     </div>
-                    <span className="text-xs text-indigo-400 font-mono font-medium">
+                    <span className="text-xs text-[var(--bg-accent)] font-mono font-medium">
                       {fontSize === 'small' && 'เล็ก (Small - 14px)'}
                       {fontSize === 'normal' && 'ปกติ / ปานกลาง (Normal - 16px)'}
                       {fontSize === 'large' && 'ใหญ่ (Large - 18px)'}
@@ -4967,37 +5408,21 @@ export default function App() {
                         key={opt.id}
                         type="button"
                         onClick={() => setFontSize(opt.id as any)}
-                        className={`px-3.5 py-2.5 rounded-xl border text-left transition-all ${
+                        className={`px-3.5 py-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                           fontSize === opt.id
-                            ? 'bg-indigo-600 text-white border-indigo-500 shadow-md ring-2 ring-indigo-500/20'
-                            : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
+                            ? 'bg-[var(--bg-accent)] text-white border-[var(--bg-accent)] shadow-sm'
+                            : 'bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-700 dark:text-slate-300'
                         }`}
                       >
                         <div className="font-bold text-xs flex items-center justify-between">
                           <span>{opt.label}</span>
                           {fontSize === opt.id && <Check className="w-3.5 h-3.5" />}
                         </div>
-                        <div className={`text-[10px] mt-0.5 ${fontSize === opt.id ? 'text-indigo-100' : 'text-slate-500'}`}>
+                        <div className={`text-[10px] mt-0.5 ${fontSize === opt.id ? 'text-indigo-100' : 'text-slate-400'}`}>
                           {opt.desc}
                         </div>
                       </button>
                     ))}
-                  </div>
-
-                  {/* Live Preview Card */}
-                  <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-1.5">
-                    <div className="text-[11px] font-semibold text-slate-400 flex items-center justify-between">
-                      <span>ตัวอย่างการแสดงผลแบบสด (Live Font Preview):</span>
-                      <span className="text-indigo-400 font-medium">เปลี่ยนขนาดทันทีทั่วทั้งโปรแกรม</span>
-                    </div>
-                    <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 text-slate-200">
-                      <p className="font-medium">
-                        SysInfo System Inspector: ตรวจสอบพอร์ตเชื่อมต่อ 127.0.0.1:8080 (PID 4920) ใช้งาน RAM 2.45 GB
-                      </p>
-                      <p className="text-xs text-slate-400 mt-1">
-                        The quick brown fox jumps over the lazy dog. 0123456789 (พร้อมรองรับการแสดงผลทุกระดับสายตา)
-                      </p>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -5253,13 +5678,13 @@ export default function App() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-white">ยืนยันการถอนการติดตั้ง</h3>
-                <p className="text-xs text-rose-300/80">SysInfo v0.1.4</p>
+                <p className="text-xs text-rose-300/80">SysInfo v0.1.5</p>
               </div>
             </div>
 
             <div className="text-xs text-slate-300 space-y-2 bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 leading-relaxed">
               <p>
-                คุณต้องการถอนการติดตั้งโปรแกรม <b>SysInfo (v0.1.4)</b> ออกจากเครื่องคอมพิวเตอร์ใช่หรือไม่?
+                คุณต้องการถอนการติดตั้งโปรแกรม <b>SysInfo (v0.1.5)</b> ออกจากเครื่องคอมพิวเตอร์ใช่หรือไม่?
               </p>
               <div className="text-[11px] text-emerald-400 bg-emerald-950/30 p-2.5 rounded-lg border border-emerald-500/20 space-y-1">
                 <p className="font-semibold flex items-center gap-1.5">

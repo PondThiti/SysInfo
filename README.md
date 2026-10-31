@@ -1,15 +1,45 @@
 # SysInfo — System Storage, File Organizer & Port Inspector
 
-> **All-in-One PC Utility (v0.1.4):** Drive Health & S.M.A.R.T. Monitor, Installed Apps & Smart Uninstall, Storage Analyzer, Smart File Organizer, Junk Cleaner, Game Libraries Analyzer & Port Inspector  
+> **All-in-One PC Utility (v0.1.5):** Drive Health & S.M.A.R.T. Monitor, Installed Apps & Smart Uninstall, Storage Analyzer, Smart File Organizer, Junk Cleaner, Game Libraries Analyzer & Port Inspector  
 > **Platform:** Windows 10 / Windows 11 (x64), Linux, macOS  
 > **Executable:** `sysinfo.exe`  
 > **Distribution:** `.exe` (NSIS), `.zip` (Portable), `.msi` (Windows Installer), `.tar.gz` (Linux)  
-> **Repository:** `https://github.com/PondThiti/SysPulse.git`  
+> **Repository:** `https://github.com/PondThiti/SysInfo.git`  
 > **Documentation & Wiki:** [`docs/wiki/Home.md`](./docs/wiki/Home.md)  
 
 ---
 
-## 🌟 ฟีเจอร์ใหม่ในเวอร์ชัน 0.1.4 (What's New in v0.1.4)
+## 🌟 ฟีเจอร์ใหม่ในเวอร์ชัน 0.1.5 (What's New in v0.1.5)
+
+### 1. 🎛️ ปรับโฉมดีไซน์ระบบ Dashboard Style & Top Capsule Navigation
+* **Top Capsule Navigation:** ยุบ Sidebar เมนูด้านข้างที่กินพื้นที่หน้าจอ เปลี่ยนมาใช้แถบนำทางทรงแคปซูล (Pill Capsule) ด้านบน ช่วยให้พื้นที่แสดงผลเนื้อหากว้างขวาง สบายตา
+* **แถว KPI 4 ใบ พร้อมภาพประกอบเฉพาะตัว:**
+  * **พื้นที่ใช้ไป (Storage Used):** แสดงสัดส่วน `ใช้ X GB / Y GB` พร้อมภาพประกอบแท่งแบ่งสัดส่วนตามไดรฟ์จริง (C:, D:)
+  * **สุขภาพไดรฟ์ (Drive Health):** แสดงสถานะความสมบูรณ์และ S.M.A.R.T. พร้อมเส้นกราฟแนวโน้มความเสถียร (Stability Sparkline)
+  * **ไฟล์ขยะที่ล้างได้ (Junk Cleanable):** แสดงขนาดไฟล์ขยะรวมพร้อมแท่งแยกหมวดหมู่ (แคชระบบ, แคชเบราว์เซอร์, แคช Shader)
+  * **พอร์ตที่เปิดอยู่ (Active Ports & Conflicts):** แสดงจำนวนพอร์ตและข้อขัดแย้ง พร้อมชิปพอร์ตเด่นที่เปิดใช้งาน
+* **Master–Detail Layout:** จัดเลย์เอาต์หน้าจอหลักแบ่งฝั่งชัดเจน
+  * ฝั่งซ้าย (แผงมืด Dark Panel): แสดงรายการไดรฟ์จริงในเครื่องให้กดเลือกไดรฟ์ พร้อมการ์ด Live Telemetry มอนิเตอร์ CPU Load และ RAM Used แบบเรียลไทม์
+  * ฝั่งขวา (แผงรายละเอียดสีธีม Accent Panel): แสดงรายละเอียดเชิงลึกของไดรฟ์ที่เลือก, สุขภาพ S.M.A.R.T., รายการไฟล์ขนาดใหญ่, และสัดส่วนโฟลเดอร์ พร้อมแท็บ Pill Switcher คาบขอบ
+* **Anti-AI Design Philosophy:** ละทิ้งลักษณะหน้าจอที่ดูเหมือน AI เจน
+  * ไม่มีแสง Glow ฟุ้งหรือการไล่เฉดสีเลอะเทอะ ใช้สี Accent สีเดียวเป็นจุดเน้น
+  * ใช้ชุดไอคอน Lucide ชุดเดียวอย่างสม่ำเสมอทั้งแอป
+  * ตัวเลขใช้ `font-variant-numeric: tabular-nums` ป้องกันตัวเลขขยับเมื่ออัปเดต
+  * สเกลรัศมีความโค้งมนเป็นระบบ (การ์ด 20px, ปุ่ม/ช่อง 12px, ชิป/พิล 999px)
+  * ไมโครคอปปี้กระชับ ชัดเจน ตรงไปตรงมา เป็นภาษาคนใช้งานจริง
+* **Design Tokens (CSS Variables):** ระบบโทนสีทำงานผ่านตัวแปร CSS (`--bg-canvas`, `--bg-card`, `--bg-dark`, `--bg-accent`, `--bg-accent-2`, `--text`, `--shadow-card`)
+
+### 2. 🏷️ ป้ายกำกับทดลอง `<BetaBadge />` & ระบบธีมสี/ฟอนต์
+* เพิ่มคอมโพเนนต์ `<BetaBadge />` แบบใช้ซ้ำ สำหรับแสดงสถานะฟีเจอร์ทดลอง วางที่หัวข้อ **"เปลี่ยนสีธีม"** และ **"เปลี่ยน Font"** ในหน้าตั้งค่า พร้อม Tooltip ให้ข้อมูล
+* **เปลี่ยนสีธีม (Accent Color Theme - BETA):** รองรับ 5 ธีมสี (ม่วง Royal Purple ค่าเริ่มต้น, ฟ้า Ocean Blue, เขียวมิ้นต์ Emerald, ส้ม Sunset Orange, เทาเข้ม Slate Dark)
+* **เปลี่ยน Font (Typography - BETA):** รองรับฟอนต์อ่านภาษาไทยสบายตา (ฟอนต์ระบบ System Default, IBM Plex Sans Thai, Noto Sans Thai, Sarabun) พร้อม Live Font Preview
+
+### 3. 🎮 หน้าคลังเกมเฉพาะ (Game Libraries Dedicated View)
+* เพิ่มแท็บคลังเกม (Games) ใน Top Nav Capsule เพื่อเข้าถึงข้อมูลเกมจาก Steam, Riot Games (VALORANT), GRYPHLINK, Roblox และ Epic Games ได้ในคลิกเดียว
+
+---
+
+## 🌟 ฟีเจอร์ก่อนหน้าในเวอร์ชัน 0.1.4 (v0.1.4 Highlights)
 
 ### 1. 🩺 ระบบตรวจสุขภาพอุปกรณ์จัดเก็บข้อมูล (Drive Health & S.M.A.R.T. Monitor)
 * **ตรวจพบ Physical Drive จริงทุกตัว:** แยก Physical Device ออกจาก Drive Letter, Volume และ Partition อย่างชัดเจน
@@ -97,9 +127,9 @@
 
 ไฟล์ตัวติดตั้งถูกส่งออกไปยัง: [`C:\Users\zeroy\Desktop\MyProject\Apps\PC-App\`](file:///C:/Users/zeroy/Desktop/MyProject/Apps/PC-App/)
 
-1. **Windows NSIS Setup (`.exe`):** `SysInfo-Setup-0.1.4.exe` / `SysInfo_Setup.exe`
-2. **Windows Portable Archive (`.zip`):** `SysInfo-0.1.4-win.zip` / `SysInfo_Portable.zip`
-3. **Windows MSI Installer (`.msi`):** `SysInfo-Setup-0.1.4.msi` / `SysInfo_Setup.msi`
+1. **Windows NSIS Setup (`.exe`):** `SysInfo-Setup-0.1.5.exe` / `SysInfo_Setup.exe`
+2. **Windows Portable Archive (`.zip`):** `SysInfo-0.1.5-win.zip` / `SysInfo_Portable.zip`
+3. **Windows MSI Installer (`.msi`):** `SysInfo-Setup-0.1.5.msi` / `SysInfo_Setup.msi`
 4. **Linux Application Package (`.tar.gz`):** `SystemStoragePortInspector_Linux_x64.tar.gz`
 
 ---
