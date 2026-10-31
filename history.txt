@@ -299,9 +299,9 @@ Update (2026-10-31): Version 0.1.5 - Dashboard Style Redesign, Top Capsule Nav &
    - นำหลักการ Anti-AI Design มาใช้: ใช้ชุดไอคอน Lucide สม่ำเสมอทั้งแอป, ปราศจากแสง Glow ฟุ้ง, ตัวเลขใช้ tabular-nums, ไมโครคอปปี้กระชับเป็นภาษาคนใช้งานจริง
    - วางระบบ Design Tokens (CSS Variables: --bg-canvas, --bg-card, --bg-dark, --bg-accent, --bg-accent-2, --text)
 
-2. ป้ายกำกับทดลอง <BetaBadge /> & ระบบธีมสี/ฟอนต์:
+2. ป้ายกำกับทดลอง <BetaBadge /> & ระบบธีมสี/ฟอนต์/โหมดสีหน้าจอ:
    - สร้างคอมโพเนนต์ <BetaBadge /> แบบใช้ซ้ำ สไตล์โปร่งแสงสีเตือน (Amber) พร้อม Tooltip
-   - วางป้าย BETA ที่หัวข้อ "เปลี่ยนสีธีม (Accent Theme)" และ "เปลี่ยน Font (Typography)" ในหน้าตั้งค่า
+   - วางป้าย BETA ที่หัวข้อ "เปลี่ยนสีธีม (Accent Theme)", "โหมดสีหน้าจอ (Dark / Light Theme)" และ "เปลี่ยน Font (Typography)" ในหน้าตั้งค่า รวมถึงระบุสถานะ [BETA] บนปุ่มสลับธีมบนหัวแอป
    - ระบบเปลี่ยนสีธีมรองรับ 5 เฉดสี (ม่วงค่าเริ่มต้น, ฟ้า, เขียวมิ้นต์, ส้ม, เทาเข้ม) ทำงานผ่านการสลับตัวแปร CSS
    - ระบบเปลี่ยน Font รองรับฟอนต์อ่านภาษาไทยสบายตา (System Default, IBM Plex Sans Thai, Noto Sans Thai, Sarabun) พร้อม Live Preview
 

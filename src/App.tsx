@@ -1685,7 +1685,7 @@ export default function App() {
           <button
             onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
             className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/80 hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 transition cursor-pointer"
-            title={theme === 'dark' ? 'สลับเป็นธีมสีขาว (Switch to Light Theme)' : 'สลับเป็นธีมมืด (Switch to Dark Theme)'}
+            title={theme === 'dark' ? 'สลับเป็นธีมสีขาว (Switch to Light Theme) [BETA]' : 'สลับเป็นธีมมืด (Switch to Dark Theme) [BETA]'}
           >
             {theme === 'dark' ? (
               <Sun className="w-3.5 h-3.5 text-amber-400" />
@@ -5263,10 +5263,14 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 2. Light / Dark Mode Toggle Cards */}
+                {/* 2. Light / Dark Mode Toggle Cards with BETA Badge */}
                 <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
                   <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center justify-between">
-                    <span>โหมดสีหน้าจอ (Dark / Light Theme)</span>
+                    <div className="flex items-center gap-2">
+                      <Sun className="w-3.5 h-3.5 text-amber-500" />
+                      <span>โหมดสีหน้าจอ (Dark / Light Theme)</span>
+                      <BetaBadge />
+                    </div>
                     <span className="text-[11px] text-slate-400">สามารถกดปุ่มสลับบนหัวโปรแกรมได้ตลอดเวลา</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
